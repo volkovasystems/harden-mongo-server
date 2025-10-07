@@ -1,0 +1,227 @@
+# MongoDB Hardening Configuration File
+# Example configuration with all available options
+
+# ================================
+# MongoDB Server Configuration
+# ================================
+
+# MongoDB database path
+DB_PATH="/var/lib/mongodb"
+
+# MongoDB log file path
+LOG_PATH="/var/log/mongodb/mongod.log"
+
+# MongoDB port (default: 27017)
+PORT="27017"
+
+# Bind IP address (127.0.0.1 for localhost only, 0.0.0.0 for all interfaces)
+BIND_IP="127.0.0.1"
+
+# ================================
+# Security Configuration
+# ================================
+
+# Enable SSL/TLS encryption (true/false)
+SSL_ENABLED="true"
+
+# SSL mode (disabled|allowSSL|preferSSL|requireSSL)
+SSL_MODE="requireSSL"
+
+# Enable MongoDB authentication (true/false)
+AUTH_ENABLED="true"
+
+# Authentication mechanisms (SCRAM-SHA-1,SCRAM-SHA-256)
+AUTH_MECHANISMS="SCRAM-SHA-1,SCRAM-SHA-256"
+
+# Security profile (basic|standard|strict|paranoid)
+SECURITY_PROFILE="standard"
+
+# ================================
+# SSL/TLS Certificate Configuration
+# ================================
+
+# Certificate Authority directory
+CA_DIR="/etc/mongoCA"
+
+# SSL certificate directory
+SSL_DIR="/etc/ssl/mongodb"
+
+# Client certificates directory
+CLIENT_DIR="/etc/mongoCA/clients"
+
+# Certificate details for CA generation
+SSL_COUNTRY="US"
+SSL_STATE="California"
+SSL_CITY="San Francisco"
+SSL_ORG="MongoDB CA"
+SSL_EMAIL="admin@localhost"
+
+# RSA key size (2048|4096)
+SSL_KEY_SIZE="2048"
+
+# Certificate validity in days
+SSL_VALIDITY="365"
+
+# ================================
+# Firewall Configuration
+# ================================
+
+# Enable firewall configuration (true/false)
+FIREWALL_ENABLED="true"
+
+# Allowed IP addresses (comma-separated)
+# Leave empty for localhost only, or specify IPs like "192.168.1.100,10.0.1.50"
+ALLOWED_IPS=""
+
+# Enable MongoDB config server port (true/false)
+ALLOW_CONFIG_SERVER="false"
+
+# Enable MongoDB shard server port (true/false)
+ALLOW_SHARD_SERVER="false"
+
+# ================================
+# Backup Configuration
+# ================================
+
+# Enable automated backups (true/false)
+BACKUP_ENABLED="true"
+
+# Backup directory path
+BACKUP_PATH="/var/backups/mongodb"
+
+# Backup retention period in days
+BACKUP_RETENTION="30"
+
+# Enable backup compression (true/false)
+BACKUP_COMPRESSION="true"
+
+# Compression method (gzip|bzip2|xz|lz4|none)
+COMPRESSION_METHOD="gzip"
+
+# Backup schedule (cron format)
+BACKUP_SCHEDULE="0 2 * * *"
+
+# ================================
+# Monitoring Configuration
+# ================================
+
+# Enable monitoring setup (true/false)
+MONITORING_ENABLED="true"
+
+# Health check interval in seconds
+CHECK_INTERVAL="300"
+
+# Enable metrics collection (true/false)
+METRICS_ENABLED="true"
+
+# Metrics collection interval in seconds
+METRICS_INTERVAL="3600"
+
+# Metrics retention period in days
+METRICS_RETENTION="7"
+
+# Alert thresholds
+DISK_ALERT_THRESHOLD="90"
+MEMORY_ALERT_THRESHOLD="90"
+LOAD_ALERT_THRESHOLD="2.0"
+
+# Alert recipient email
+ALERT_EMAIL="admin@localhost"
+
+# ================================
+# User Management Configuration
+# ================================
+
+# MongoDB admin username
+ADMIN_USER="admin"
+
+# MongoDB admin password (leave empty to prompt)
+ADMIN_PASSWORD=""
+
+# Application database name
+APP_DATABASE="myapp"
+
+# Application username
+APP_USER="appuser"
+
+# Application password (leave empty to prompt)
+APP_PASSWORD=""
+
+# ================================
+# Advanced Configuration
+# ================================
+
+# WiredTiger cache size in GB (0 for auto-calculation)
+CACHE_SIZE_GB="0"
+
+# Maximum incoming connections
+MAX_CONNECTIONS="1000"
+
+# Enable JavaScript execution (true/false)
+JAVASCRIPT_ENABLED="false"
+
+# Enable operation profiling (off|slowOp|all)
+PROFILING_MODE="slowOp"
+
+# Slow operation threshold in milliseconds
+SLOW_OP_THRESHOLD="100"
+
+# ================================
+# System Configuration
+# ================================
+
+# MongoDB system user
+MONGODB_USER="mongodb"
+
+# MongoDB system group
+MONGODB_GROUP="mongodb"
+
+# Enable system limits configuration (true/false)
+CONFIGURE_LIMITS="true"
+
+# File descriptor limit
+NOFILE_LIMIT="64000"
+
+# Process limit
+NPROC_LIMIT="64000"
+
+# ================================
+# Logging Configuration
+# ================================
+
+# Log level (DEBUG|INFO|WARN|ERROR|FATAL)
+LOG_LEVEL="INFO"
+
+# Enable verbose output (true/false)
+VERBOSE="false"
+
+# Enable debug output (true/false)
+DEBUG="false"
+
+# Enable file logging (true/false)
+LOG_TO_FILE="true"
+
+# Enable syslog logging (true/false)
+LOG_TO_SYSLOG="false"
+
+# Log file path for hardening utility
+HARDENING_LOG_FILE="/var/log/mongodb-hardening/mongodb-hardening.log"
+
+# Use colored output (true/false)
+USE_COLORS="true"
+
+# ================================
+# Environment-Specific Configuration
+# ================================
+
+# Environment type (development|staging|production)
+ENVIRONMENT="production"
+
+# Enable dry-run mode (true/false)
+DRY_RUN="false"
+
+# Force mode - skip confirmations (true/false)
+FORCE="false"
+
+# Configuration validation level (basic|standard|strict)
+VALIDATION_LEVEL="standard"
