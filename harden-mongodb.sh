@@ -23,6 +23,7 @@ load_core_modules() {
         "logging" 
         "ui"
         "system"
+        "failsafe"
         "mongodb"
         "security"
         "ssl"
@@ -108,6 +109,14 @@ COMMANDS:
     monitoring remove       Remove monitoring setup
     metrics collect         Collect current metrics
     metrics cleanup         Clean up old metrics files
+
+  Fail-safe & Recovery:
+    failsafe status         Show current fail-safe system status
+    failsafe enable         Enable comprehensive fail-safe protection
+    failsafe disable        Disable fail-safe monitoring
+    recovery check          Check for incomplete operations
+    recovery resume         Resume from previous interrupted run
+    rollback [LEVEL]        Rollback system changes (config|security|monitoring|full)
 
   Firewall Management:
     firewall status         Show firewall status and rules
