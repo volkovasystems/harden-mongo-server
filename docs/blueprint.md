@@ -194,7 +194,7 @@ Default configuration (best security)
 - principals (authenticationRestrictions clientSource defaults):
   - root: ["127.0.0.1", "VPN CIDR if enabled"]
   - admin: ["VPN CIDR if enabled"]
-  - app: ["127.0.0.1", "VPN CIDR if enabled"]
+- app: ["127.0.0.1", "VPN CIDR if enabled", "network.allowedIPs"]
   - backup: ["127.0.0.1"]
 - appAccess:
   - autoApproveNewDatabases: true
@@ -209,7 +209,7 @@ Default configuration (best security)
   - retention: daily=7, weekly=4, monthly=12
   - quota: percent=20, maxGiB=50, minFreeGiB=15
   - compression: zstd; encryption: age (keyPath=/etc/harden-mongo-server/keys/backup.agekey)
-- schedule: auto (02:00 local by default; adjusts to the quietest hour as data is gathered)
+  - schedule: auto (02:00 local by default; adjusts to the quietest hour as data is gathered)
 - updatePolicy:
   - zeroDowntimePreferred: true; warnIfRestartRequired: true
 - openvpn:
@@ -321,8 +321,6 @@ Planned file changes (structure-preserving)
 - Firewall (./lib/harden-mongo-server/firewall.sh)
   - Enforce default DROP on public interfaces; block ICMP echo on public; allow ICMP on VPN.
   - Rate limit UDP/1194 (avgPktsPerSec=50, burstPkts=200); enforce mongodbConnLimits (perSourceConcurrent=200, newConnPerSec=20, burst=40) on 27017 (VPN and allowed IPs).
-- Main CLI (./harden-mongo-server)
-  - Schedule daily/weekly/monthly at quiet hour; local target; zstd + age encryption; retention + quotas; avoid restart windows.
 - Monitoring (./lib/harden-mongo-server/monitoring.sh)
   - Light activity sampling (quiet-hour learning) and event watcher to trigger just-in-time DB grants.
   - One-time VPN lock watcher: detect first SSH over VPN and trigger lock-to-VPN changes, then disable itself.
