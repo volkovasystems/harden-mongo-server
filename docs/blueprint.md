@@ -41,7 +41,7 @@ Security model
 TLS and certificates
 - Private CA only (no public domain required) for server, client, and VPN certificates.
 - Database client certificates are used only for MongoDB; VPN client certificates are separate and issued per human. They rotate and can be revoked independently.
-- First run certificates: 6 total — 4 MongoDB x509 client certs (Root, Admin, App, Backup) and 2 OpenVPN client certs for human access (admin and viewer).
+- First run certificates: 8 total — 1 MongoDB server cert, 1 VPN server cert, 4 MongoDB x509 client certs (Root, Admin, App, Backup), and 2 OpenVPN client certs for human access (admin and viewer).
 - Monthly automated renewal/rotation.
 - Zero downtime preferred: perform a graceful reload. If reload fails or is unsupported, warn before a short, safe restart; otherwise revert to last-known-good.
 
@@ -74,7 +74,7 @@ Networking and exposure
 Onboarding (one-liner download via Cloudflare Quick Tunnel)
 - Purpose: let any user download everything needed with a single copy-paste command (no PEM, no EC2 IP knowledge, no UI).
 - How it works (server side, automated):
-  - Package a single archive named hms-onboarding-<TOKEN>.zip containing the files listed below (flat, no subfolders, no README).
+  - Package a single archive named hms-onboarding-YYYY-MM-DD.zip containing the files listed below (flat, no subfolders, no README).
   - Launch a short-lived Cloudflare Quick Tunnel (no account) to expose exactly one HTTPS URL for that archive.
   - Enforce single-use and expiry: first successful download deletes the archive and shuts down the tunnel; otherwise the URL expires after onboarding.expiryMinutes.
   - If a public URL cannot be obtained, the tool prints: "Unable to generate the onboarding script. Please contact a human administrator to help download the files." No fallback is attempted.
@@ -83,14 +83,14 @@ Onboarding (one-liner download via Cloudflare Quick Tunnel)
     curl -fsSL "https://<random>.trycloudflare.com/download/<TOKEN>" -o hms-onboarding.zip && unzip -q hms-onboarding.zip && rm hms-onboarding.zip
   - Windows (PowerShell):
     iwr -UseBasicParsing "https://<random>.trycloudflare.com/download/<TOKEN>" -OutFile hms-onboarding.zip; Expand-Archive -Force .\hms-onboarding.zip .; Remove-Item .\hms-onboarding.zip
-- Compressed file contents (flat, date-stamped YYYYMMDD in UTC):
-  - admin-YYYYMMDD.ovpn
-  - viewer-YYYYMMDD.ovpn
-  - db-root-YYYYMMDD.pem      (client cert+key)
-  - db-admin-YYYYMMDD.pem     (client cert+key)
-  - db-app-YYYYMMDD.pem       (client cert+key)
-  - db-backup-YYYYMMDD.pem    (client cert+key)
-  - db-ca-YYYYMMDD.pem        (server CA chain)
+- Compressed file contents (flat, date-stamped YYYY-MM-DD in UTC):
+  - admin-YYYY-MM-DD.ovpn
+  - viewer-YYYY-MM-DD.ovpn
+  - db-root-YYYY-MM-DD.pem      (client cert+key)
+  - db-admin-YYYY-MM-DD.pem     (client cert+key)
+  - db-app-YYYY-MM-DD.pem       (client cert+key)
+  - db-backup-YYYY-MM-DD.pem    (client cert+key)
+  - db-ca-YYYY-MM-DD.pem        (server CA chain)
 - Notes:
   - The .ovpn profiles embed their client cert/key and the VPN CA chain.
   - Each db-*.pem contains the full client identity (cert+key) suitable for mongosh/drivers via tlsCertificateKeyFile.
@@ -116,8 +116,8 @@ General
 Networking (single-IP changes only; no bulk via flags)
 - --allow-ip-add IP                       Allow one IP to access MongoDB (adds to network.allowedIPs)
 - --allow-ip-remove IP                    Remove one IP from access list
-- --bind-add ADDRESS                      Add an address to net.bind (e.g., 127.0.0.1 or interface address)
-- --bind-remove ADDRESS                   Remove an address from net.bind
+- --bind-add ADDRESS                      Add an address to network.bind (e.g., 127.0.0.1 or interface address)
+- --bind-remove ADDRESS                   Remove an address from network.bind
 
 VPN and SSH
 - --vpn-enable | --vpn-disable            Turn VPN on/off
@@ -203,7 +203,7 @@ Onboarding (operator convenience)
 - --onboarding-expiry MINUTES                Override link TTL (default 10)
 - --onboarding-single-use true|false         Single-use URL (default true)
 - --onboarding-include-readme true|false     Include README in archive (default false)
-- --onboarding-date-format YYYYMMDD          Set filename date format (default YYYYMMDD)
+- --onboarding-date-format YYYY-MM-DD        Set filename date format (default YYYY-MM-DD)
 
 Viewer chroot
 - --viewer-chroot-root PATH                 Set chroot root for viewer
@@ -224,22 +224,22 @@ Default configuration (best security)
   - expiryMinutes: 10
   - singleUse: true
   - includeReadme: false
-  - filenameDateFormat: "YYYYMMDD" (UTC)
+  - filenameDateFormat: "YYYY-MM-DD" (UTC, ISO 8601)
 - tls:
   - mode: internalCA
   - rotation: periodDays=30, zeroDowntimeReload=true
 - network:
-  - bind: ["127.0.0.1"] (plus VPN interface if enabled)
+  - bind: ["127.0.0.1", "<VPN-interface>"] (VPN enabled by default)
   - allowedIPs: [] (no public access by default)
 - mongodb:
   - tlsMinVersion: "TLS1_2"
   - maxIncomingConnections: 1024
   - appRole: { allowDDL: false, allowIndex: false }
-- principals (authenticationRestrictions clientSource defaults):
-  - root: ["127.0.0.1", "10.8.0.0/24"]
-  - admin: ["10.8.0.0/24"]
-  - app: ["127.0.0.1", "10.8.0.0/24"] + network.allowedIPs
-  - backup: ["127.0.0.1"]
+- principals:
+  - root: { allowedClientSources: ["127.0.0.1", "10.8.0.0/24"] }
+  - admin: { allowedClientSources: ["10.8.0.0/24"] }
+  - app: { allowedClientSources: ["127.0.0.1", "10.8.0.0/24"] + network.allowedIPs }
+  - backup: { allowedClientSources: ["127.0.0.1"] }
 - appAccess:
   - autoApproveNewDatabases: true
   - excludeDatabases: ["admin","local","config"]
@@ -297,6 +297,7 @@ System integration
   - Certificate rotation (monthly)
   - Lightweight monitor (for activity sampling and auto-grants)
   - OpenVPN server (enabled at boot)
+  - VPN lock watcher (one-time auto-lock service)
 - VPN lock watcher (one-time): detects first SSH over VPN and locks SSH/MongoDB to VPN, then disables itself
 - Onboarding one-shot: ephemeral file endpoint + cloudflared quick tunnel (single-use, short-lived); auto-shutdown after success/expiry
 - Continuous enforcement: each execution validates and reapplies configured controls; no-ops when compliant; fails closed with rollback or clear stop when preflight requirements are not met.
@@ -308,14 +309,14 @@ System integration
 - Polkit rules allow approved users to operate the tool without sudo after bootstrap.
 
 Acceptance checklist
-- One-liner onboarding (HTTPS) without PEM/IP: user downloads a flat, date-stamped zip (admin-YYYYMMDD.ovpn, viewer-YYYYMMDD.ovpn, db-*-YYYYMMDD.pem, db-ca-YYYYMMDD.pem); if a public URL cannot be created, the tool instructs the user to contact a human administrator (no fallback attempted).
+- One-liner onboarding (HTTPS) without PEM/IP: user downloads a flat, date-stamped zip named hms-onboarding-YYYY-MM-DD.zip containing admin-YYYY-MM-DD.ovpn, viewer-YYYY-MM-DD.ovpn, db-*-YYYY-MM-DD.pem, and db-ca-YYYY-MM-DD.pem; if a public URL cannot be created, the tool instructs the user to contact a human administrator (no fallback attempted).
 - VPN hardened by default (tls-crypt, AES-256-GCM/SHA256, TLS ≥1.2), rate-limited port, and stealth DROP on public interfaces; ICMP allowed only on VPN.
 - TLS required; x509-only; private CA; monthly renewal without downtime.
 - MongoDB uses WiredTiger; FCV pinned; maxIncomingConnections capped; per-source connection limits on 27017; App role has minimal DML (no DDL/index) and is IP-pinned; Admin ops occur over VPN.
 - Admin cannot read or change app data; App has read/write only to business DBs (new DBs auto-secured);
   Backup can dump only; Root has full control (use sparingly).
 - VPN installed and enabled; MongoDB and SSH accessible only over VPN by default; on EC2, OS firewall enforces VPN-only. The tool does not use cloud credentials or modify Security Groups; it may print guidance you can apply manually.
-- First run generates 6 certificates: 4 for DB roles (Root/Admin/App/Backup) and 2 for VPN human access (admin/viewer). DB certs do not work for VPN, and VPN certs do not work for DB.
+- First run generates 8 certificates: 1 MongoDB server cert, 1 VPN server cert, 4 DB client certs for roles (Root/Admin/App/Backup), and 2 VPN client certs for human access (admin/viewer). DB certs do not work for VPN, and VPN certs do not work for DB.
 - Auto-lock to VPN-only occurs after the first successful SSH over VPN; the watcher disables itself; rollback works if failure occurs.
 - Human access via VPN uses per-human certs; Viewer role is SFTP-only with curated, read-only paths and no secrets; Admin role has shell with sudo.
 - Local-only by default; public allowed only via single-IP flags; firewall matches the config.
@@ -341,7 +342,7 @@ Implementation notes (at a glance)
 
 Planned file changes (structure-preserving)
 - Onboarding helper
-  - Create an ephemeral static file endpoint (127.0.0.1) to serve exactly one archive hms-onboarding-<TOKEN>.zip (flat, date-stamped files).
+  - Create an ephemeral static file endpoint (127.0.0.1) to serve exactly one archive hms-onboarding-YYYY-MM-DD.zip (flat, date-stamped files).
   - Invoke cloudflared quick tunnel (no account) to expose a single HTTPS URL; enforce single-use and TTL; auto-delete archive and stop tunnel after success/expiry.
   - Print one-liners for Unix/Windows with the full URL embedded; if the tunnel cannot be created, print an instruction to contact a human administrator.
 - Firewall (./lib/harden-mongo-server/firewall.sh)
@@ -353,7 +354,7 @@ Planned file changes (structure-preserving)
   - VPN human management flags: --vpn-human-add/--vpn-human-revoke/--vpn-human-rotate with role=viewer|admin.
   - Phases unchanged; help text documents new flags.
 - Core (./lib/harden-mongo-server/core.sh)
-  - Parse new config keys (principals, appAccess, backups, tls, network, updatePolicy, onboarding, humans, viewer config).
+  - Parse new config keys (onboarding, tls, network, mongodb, principals, appAccess, firewall, updatePolicy, backups, openvpn, ssh, autoLockToVpnOnFirstRun, humans, viewer).
   - Atomic config writes with previous-version backup and a last-known-good pointer; diff logged for audit.
 - MongoDB (./lib/harden-mongo-server/mongodb.sh)
   - Enforce x509-only + TLS-required; set tlsMinVersion=TLS1_2 (preflight gates if unsupported); custom ops role (clusterMonitor-only); provision $external users (Root/Admin/App/Backup) with auth restrictions.
@@ -395,21 +396,38 @@ This schema mirrors the Default configuration above; every key is configurable a
   - expiryMinutes: 10
   - singleUse: true
   - includeReadme: false
-  - filenameDateFormat: "YYYYMMDD" (UTC)
+  - filenameDateFormat: "YYYY-MM-DD" (UTC, ISO 8601)
 - tls:
   - mode: "internalCA"; rotation: { periodDays: 30, zeroDowntimeReload: true }
 - network:
-  - bind: ["127.0.0.1"] (plus VPN if enabled); allowedIPs: [] (empty means no public exposure)
+  - bind: ["127.0.0.1", "<VPN-interface>"] (VPN enabled by default); allowedIPs: [] (empty means no public exposure)
 - mongodb:
   - tlsMinVersion: "TLS1_2"
   - maxIncomingConnections: 1024
   - appRole: { allowDDL: false, allowIndex: false }
+- principals:
+  - root: { allowedClientSources: ["127.0.0.1", "10.8.0.0/24"] }
+  - admin: { allowedClientSources: ["10.8.0.0/24"] }
+  - app: { allowedClientSources: ["127.0.0.1", "10.8.0.0/24"] + network.allowedIPs }
+  - backup: { allowedClientSources: ["127.0.0.1"] }
+- appAccess:
+  - autoApproveNewDatabases: true
+  - excludeDatabases: ["admin", "local", "config"]
+  - denylistPatterns: []
 - firewall:
   - stealth: { dropUnmatchedPublic: true, blockIcmpEchoPublic: true, allowIcmpVpn: true }
   - openvpnRateLimit: { avgPktsPerSec: 50, burstPkts: 200 }
   - mongodbConnLimits: { perSourceConcurrent: 200, newConnPerSec: 20, burst: 40 }
 - updatePolicy:
   - zeroDowntimePreferred: true; warnIfRestartRequired: true
+- backups:
+  - enabled: true
+  - targetDir: "/var/backups/harden-mongo-server"
+  - retention: { daily: 7, weekly: 4, monthly: 12 }
+  - quota: { percent: 20, maxGiB: 50, minFreeGiB: 15 }
+  - compression: "zstd"
+  - encryption: { type: "age", keyPath: "/etc/harden-mongo-server/keys/backup.agekey" }
+  - schedule: "auto" (02:00 local by default; adjusts to quietest hour)
 - openvpn:
   - enabled: true; network: "10.8.0.0/24"; port: 1194; proto: "udp"
   - crypto: { tlsCrypt: true, cipher: "AES-256-GCM", auth: "SHA256", tlsVersionMin: "TLS1_2", renegSeconds: 43200 }
