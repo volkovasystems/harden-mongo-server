@@ -24,6 +24,7 @@ What you do
 - On first run, the tool sets up the OpenVPN server and issues two client profiles you can use to connect: admin (full) and viewer (read-only).
 - If you need public access, use single-IP flags (one at a time). For bulk changes, edit the config file.
 - Otherwise, the tool adapts automatically: TLS, auth, new DB access, backups, and firewall.
+- No cloud credentials are required at any time. First access typically uses your SSH PEM once; subsequent access uses the VPN.
 
 How it operates (at a glance)
 - Phases: preflight → bootstrap → tls → mongodb-config → provision → firewall → backups → monitor → verify.
@@ -66,7 +67,7 @@ Networking and exposure
   - --allow-ip-add <IP>
   - --allow-ip-remove <IP>
 - SSH policy: VPN-only by default. You can toggle with flags if needed (see VPN and SSH flags).
-- EC2: OS firewall enforces VPN-only. The tool prints recommended Security Group rules to restrict 22 and 27017 to VPN-only; if AWS credentials are present and you opt in, it can apply them.
+- EC2: OS firewall enforces VPN-only. The tool does not use any cloud credentials and does not change Security Groups. It may print suggested Security Group rules you can apply later, manually.
 - Auto-lock to VPN-only: after the first successful SSH login over the VPN, a one-time watcher locks SSH and MongoDB to the VPN interface, then disables itself. No manual flag or timer wait required.
 - No bulk changes via flags. For multiple IPs, edit the config file.
 
@@ -269,7 +270,7 @@ Acceptance checklist
 - MongoDB uses WiredTiger; FCV pinned; maxIncomingConnections capped; per-source connection limits on 27017; App role has minimal DML (no DDL/index) and is IP-pinned; Admin ops occur over VPN.
 - Admin cannot read or change app data; App has read/write only to business DBs (new DBs auto-secured);
   Backup can dump only; Root has full control (use sparingly).
-- VPN installed and enabled; MongoDB and SSH accessible only over VPN by default; on EC2, OS firewall enforces VPN-only and SG guidance is provided/applied if opted.
+- VPN installed and enabled; MongoDB and SSH accessible only over VPN by default; on EC2, OS firewall enforces VPN-only. The tool does not use cloud credentials or modify Security Groups; it may print guidance you can apply manually.
 - First run generates 6 certificates: 4 for DB roles (Root/Admin/App/Backup) and 2 for VPN human access (admin/viewer). DB certs do not work for VPN, and VPN certs do not work for DB.
 - Auto-lock to VPN-only occurs after the first successful SSH over VPN; the watcher disables itself; rollback works if failure occurs.
 - Human access via VPN uses per-human certs; Viewer role is SFTP-only with curated, read-only paths and no secrets; Admin role has shell with sudo.
