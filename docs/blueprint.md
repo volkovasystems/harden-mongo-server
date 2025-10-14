@@ -192,9 +192,9 @@ Default configuration (best security)
   - maxIncomingConnections: 1024
   - appRole: { allowDDL: false, allowIndex: false }
 - principals (authenticationRestrictions clientSource defaults):
-  - root: ["127.0.0.1", "VPN CIDR if enabled"]
-  - admin: ["VPN CIDR if enabled"]
-- app: ["127.0.0.1", "VPN CIDR if enabled", "network.allowedIPs"]
+  - root: ["127.0.0.1", "10.8.0.0/24"]
+  - admin: ["10.8.0.0/24"]
+  - app: ["127.0.0.1", "10.8.0.0/24"] + network.allowedIPs
   - backup: ["127.0.0.1"]
 - appAccess:
   - autoApproveNewDatabases: true
