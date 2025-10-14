@@ -59,7 +59,7 @@ MongoDB hardening (enabled by default)
 Networking and exposure
 - Default: bind to localhost only; nothing exposed publicly.
 - VPN: installed and enabled by default; MongoDB (27017) and SSH (22) are allowed only over the VPN interface by default.
-- VPN hardening (enabled): tls-crypt on control channel; cipher AES-256-GCM; auth SHA256; tls-version-min TLS1_2 (TLS1_3 if supported); compression disabled; UDP/1194. Firewall rate limit on OpenVPN port (avg 50 pkts/sec, burst 200).
+- VPN hardening (enabled): tls-crypt on control channel; cipher AES-256-GCM; auth SHA256; tls-version-min TLS1_2; compression disabled; UDP/1194. Firewall rate limit on OpenVPN port (avg 50 pkts/sec, burst 200).
 - Public side stealth (enabled): default DROP for unmatched inbound on public interfaces; block ICMP echo on public interfaces; allow ICMP on VPN.
 - App access (allowed IPs): 27017 is opened only to exactly the allowed IPs you specify; access still requires x509 DB certs (IP alone is not enough).
 - Per-source connection controls (enabled): 27017 enforces per-source concurrent cap=200 and new-connection rate limit ≤20/sec (burst 40) on both VPN and allowed IPs.
@@ -171,7 +171,7 @@ Onboarding (operator convenience)
 Backups (local-only, safe by default)
 - Schedule: daily, weekly (Sunday), monthly (1st) at the learned quiet hour (fallback 02:00).
 - Encryption: age; root-only key in /etc/harden-mongo-server/keys/backup.agekey.
-- Compression: zstd (gzip fallback).
+- Compression: zstd.
 - Disk safety: retention and quotas to avoid filling the disk; if space would be exceeded, trim in a safe order or skip with an alert.
 
 Default configuration (best security)
@@ -209,7 +209,7 @@ Default configuration (best security)
   - retention: daily=7, weekly=4, monthly=12
   - quota: percent=20, maxGiB=50, minFreeGiB=15
   - compression: zstd; encryption: age (keyPath=/etc/harden-mongo-server/keys/backup.agekey)
-  - schedule: auto (quiet-hour learning; fallback 02:00)
+- schedule: auto (02:00 local by default; adjusts to the quietest hour as data is gathered)
 - updatePolicy:
   - zeroDowntimePreferred: true; warnIfRestartRequired: true
 - openvpn:
@@ -247,7 +247,7 @@ System integration
   - OS users created: hms-admin (admins group; shell + sudo) and hms-viewer (viewers group; SFTP-only chroot; no shell)
 - SSH configuration:
   - VPN-only enforced by firewall; sshd drop-in sets PermitRootLogin no; Match Group harden-mongo-server-viewers forces internal-sftp + ChrootDirectory.
-- OS hardening (enabled): unattended security updates and minimal sysctls (syncookies, rp_filter, reject redirects/source routes, protected symlinks/hardlinks, restricted kptr/dmesg, ignore broadcast pings). Log rotation for mongod, audit (if enabled), and tool logs.
+- OS hardening (enabled): unattended security updates and minimal sysctls (syncookies, rp_filter, reject redirects/source routes, protected symlinks/hardlinks, restricted kptr/dmesg, ignore broadcast pings). Log rotation for mongod and tool logs.
 - Systemd timers/services:
   - Backup scheduler (daily/weekly/monthly)
   - Certificate rotation (monthly)
@@ -312,12 +312,12 @@ Planned file changes (structure-preserving)
   - Parse new config keys (principals, appAccess, backups, tls, network, updatePolicy, onboarding, humans, viewer config).
   - Atomic config writes with previous-version backup and a last-known-good pointer; diff logged for audit.
 - MongoDB (./lib/harden-mongo-server/mongodb.sh)
-  - Enforce x509-only + TLS-required; set TLS min version to 1.2+ where supported; custom ops role (clusterMonitor-only); provision $external users (Root/Admin/App/Backup) with auth restrictions.
+  - Enforce x509-only + TLS-required; set tlsMinVersion=TLS1_2 (preflight gates if unsupported); custom ops role (clusterMonitor-only); provision $external users (Root/Admin/App/Backup) with auth restrictions.
   - Create App custom role hmsAppRW (minimal DML; no DDL/index operations). Grant/revoke App readWrite via this role; automatic just-in-time grant for new business DBs when first used by App.
   - Apply changes via graceful reload where supported; warn if restart is required; on failure, trigger rollback.
 - TLS/PKI (./lib/harden-mongo-server/ssl.sh)
   - Private CA issuance for server and client certs; CRL management; monthly rotation; graceful reload.
-  - VPN per-human client cert issuance/revocation/rotation (separate from DB certs). Enable tls-crypt by default.
+  - VPN per-human client cert issuance/revocation/rotation (separate from DB certs). Enable tls-crypt by default; enforce tlsMinVersion=TLS1_2.
 - Firewall (./lib/harden-mongo-server/firewall.sh)
   - Enforce default DROP on public interfaces; block ICMP echo on public; allow ICMP on VPN.
   - Rate limit UDP/1194 (avgPktsPerSec=50, burstPkts=200); enforce mongodbConnLimits (perSourceConcurrent=200, newConnPerSec=20, burst=40) on 27017 (VPN and allowed IPs).
