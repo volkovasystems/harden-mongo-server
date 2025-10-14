@@ -125,13 +125,13 @@ Features deferred to future versions are advanced management and analytics only.
 - --allow-ip-remove IP                    Remove one IP from access list
 
 ### Backups (local-only)
-- --backup-now                             Run a backup immediately
 - --restore PATH                           Restore from a backup archive
 
 ## Backups (local-only, safe by default)
 - Schedule: daily at 02:00 local by default.
 - Encryption: age; root-only key in /etc/harden-mongo-server/keys/backup.agekey.
 - Compression: zstd.
+- Initial backup (first run): if an existing MongoDB instance is detected, take an encrypted local backup before any changes. If the backup cannot be taken safely (no key, insufficient space/quota, or mongod unreachable), the tool stops and instructs an operator (fails closed).
 - Disk safety: retention (daily=7) and basic quota checks to avoid filling the disk.
 
 ## Default configuration (1.0.0 MVP)
@@ -209,6 +209,7 @@ Features deferred to future versions are advanced management and analytics only.
 
 ## Acceptance checklist (1.0.0 MVP)
 - One-liner onboarding (HTTPS) without PEM/IP: user downloads a flat, date-stamped zip named hms-onboarding-YYYY-MM-DD.zip containing admin-YYYY-MM-DD.ovpn, viewer-YYYY-MM-DD.ovpn, db-*-YYYY-MM-DD.pem, and db-ca-YYYY-MM-DD.pem; if a public URL cannot be created, the tool instructs the user to contact a human administrator (no fallback attempted).
+- First-run initial backup (if existing DB): before any changes are applied, an encrypted local backup is taken. If a safe backup cannot be taken, the tool fails closed with a clear message.
 - VPN hardened by default (tls-crypt, AES-256-GCM/SHA256, TLS ≥1.2), and stealth DROP on public interfaces; ICMP allowed only on VPN.
 - TLS required; x509-only; private CA; monthly renewal without downtime.
 - MongoDB uses WiredTiger; FCV pinned; maxIncomingConnections capped; App role has minimal DML (no DDL/index); Admin ops occur over VPN.
@@ -231,7 +232,7 @@ Features deferred to future versions are advanced management and analytics only.
   - mongodb.sh: x509-only, custom ops role, user provisioning, auto just-in-time DB grants, zero-downtime apply.
   - ssl.sh: private CA issuance, CRL, monthly rotation with graceful reload.
   - firewall.sh: basic rules for 27017 based on config and flags.
-  - backup.sh: simple scheduled, encrypted local backups with basic retention.
+- backup.sh: simple scheduled, encrypted local backups with basic retention; perform a one-time initial backup before changes if an existing DB is detected.
   - system.sh/failsafe.sh: atomic config writes, last-known-good tracking, rollback on failed reloads.
 - Timers/services: backup (daily), cert-rotate (monthly), openvpn (at boot), vpn-lock-watcher (one-time).
 

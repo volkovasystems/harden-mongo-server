@@ -30,6 +30,7 @@ How it operates (at a glance)
 - Phases: preflight → bootstrap → tls → mongodb-config → provision → firewall → backups → monitor → verify.
 - Idempotent: reruns safely reconcile the system to the desired secure state.
 - Continuous enforcement: on every run, the tool verifies and re-enforces all security features (VPN hardening, firewall policy, TLS/auth settings, roles and auth restrictions, sysctls, backups). If a required condition cannot be met, it stops or rolls back with a clear message.
+- First-run initial backup (if existing DB): on the first run, if an existing MongoDB instance is detected (running and/or user databases present), the tool performs an encrypted local backup before any changes. If a safe backup cannot be taken (missing encryption key, insufficient free space/quota, or mongod unreachable), execution stops with a clear message (fails closed).
 
 Security model
 - Root: built-in root role; for provisioning and emergencies. Restricted to localhost/VPN.
@@ -216,6 +217,7 @@ Backups (local-only, safe by default)
 - Schedule: daily, weekly (Sunday), monthly (1st) at 02:00 local by default; adjusts to the quietest hour as data is gathered.
 - Encryption: age; root-only key in /etc/harden-mongo-server/keys/backup.agekey.
 - Compression: zstd.
+- Initial backup (first run): if an existing MongoDB instance is detected, take an encrypted local backup before any changes. If the backup cannot be taken safely (no key, insufficient space/quota, or mongod unreachable), the tool stops and instructs an operator (fails closed).
 - Disk safety: retention and quotas to avoid filling the disk; if space would be exceeded, trim in a safe order or skip with an alert.
 
 Default configuration (best security)
@@ -310,6 +312,7 @@ System integration
 
 Acceptance checklist
 - One-liner onboarding (HTTPS) without PEM/IP: user downloads a flat, date-stamped zip named hms-onboarding-YYYY-MM-DD.zip containing admin-YYYY-MM-DD.ovpn, viewer-YYYY-MM-DD.ovpn, db-*-YYYY-MM-DD.pem, and db-ca-YYYY-MM-DD.pem; if a public URL cannot be created, the tool instructs the user to contact a human administrator (no fallback attempted).
+- First-run initial backup (if existing DB): before any changes are applied, an encrypted local backup is taken. If a safe backup cannot be taken, the tool fails closed with a clear message.
 - VPN hardened by default (tls-crypt, AES-256-GCM/SHA256, TLS ≥1.2), rate-limited port, and stealth DROP on public interfaces; ICMP allowed only on VPN.
 - TLS required; x509-only; private CA; monthly renewal without downtime.
 - MongoDB uses WiredTiger; FCV pinned; maxIncomingConnections capped; per-source connection limits on 27017; App role has minimal DML (no DDL/index) and is IP-pinned; Admin ops occur over VPN.
@@ -334,7 +337,7 @@ Implementation notes (at a glance)
   - mongodb.sh: x509-only, custom ops role, user provisioning, auto just-in-time DB grants, zero-downtime apply.
   - ssl.sh: private CA issuance, CRL, monthly rotation with graceful reload.
   - firewall.sh: least-privilege rules for 27017 based on config and flags.
-  - backup.sh: scheduled, encrypted local backups with retention/quotas; run at quiet hour.
+- backup.sh: scheduled, encrypted local backups with retention/quotas; run at quiet hour; perform a one-time initial backup before changes if an existing DB is detected.
   - monitoring.sh: light activity sampling and event detection to support scheduling and auto-grants.
   - system.sh/failsafe.sh: atomic config writes, last-known-good tracking, rollback on failed reloads.
 - Timers/services: backup, cert-rotate, monitor (low overhead).
