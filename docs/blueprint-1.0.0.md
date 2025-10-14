@@ -101,7 +101,7 @@ Features deferred to future versions are advanced management and analytics only.
 - Public access (if truly needed): single-IP flags that write to config and apply firewall safely with zero downtime:
   - --allow-ip-add <IP>
   - --allow-ip-remove <IP>
-- SSH policy: VPN-only by default. You can toggle with flags if needed (see VPN and SSH flags).
+- SSH policy: VPN-only by default (enforced automatically).
 - EC2: OS firewall enforces VPN-only. The tool does not use any cloud credentials and does not change Security Groups. It may print suggested Security Group rules you can apply later, manually.
 - Auto-lock to VPN-only: after the first successful SSH login over the VPN, a one-time watcher locks SSH and MongoDB to the VPN interface, then disables itself. No manual flag or timer wait required.
 - No bulk changes via flags. For multiple IPs, edit the config file.
@@ -119,7 +119,6 @@ Features deferred to future versions are advanced management and analytics only.
 ### General
 - --config PATH                          Set alternate config path for this run (does not write config)
 - --dry-run                               Show planned changes only
-- --verbose | --quiet                     Adjust output
 
 ### Networking (single-IP changes only)
 - --allow-ip-add IP                       Allow one IP to access MongoDB (adds to network.allowedIPs)
@@ -370,12 +369,6 @@ This schema shows the configuration for 1.0.0.
    - --viewer-chroot-root, --viewer-include-add/remove, --viewer-exclude-add/remove
    - **1.0.0**: Essential flags only
 
-6. **Advanced configuration sections**
-    - appAccess (auto-approval settings, denylist patterns)
-    - updatePolicy (zero-downtime preferences)
-    - humans (per-human VPN and SSH management)
-    - viewer (chroot configuration)
-    - **1.0.0**: Core config sections only
 
 ### Version roadmap:
 - **1.0.0**: Core security + essential automation (TLS, x509, VPN, firewall, backups, auto-onboarding, auto-grants, auto-rotation, auto-lock)
