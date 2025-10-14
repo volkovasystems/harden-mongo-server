@@ -116,28 +116,46 @@ General
 Networking (single-IP changes only; no bulk via flags)
 - --allow-ip-add IP                       Allow one IP to access MongoDB (adds to network.allowedIPs)
 - --allow-ip-remove IP                    Remove one IP from access list
+- --bind-add ADDRESS                      Add an address to net.bind (e.g., 127.0.0.1 or interface address)
+- --bind-remove ADDRESS                   Remove an address from net.bind
 
 VPN and SSH
 - --vpn-enable | --vpn-disable            Turn VPN on/off
 - --vpn-network CIDR                      Configure VPN network (e.g., 10.8.0.0/24)
 - --vpn-port N                            VPN port (default 1194)
 - --vpn-proto udp|tcp                     VPN protocol (default udp)
+- --vpn-tls-crypt true|false              Enable/disable tls-crypt (default true)
+- --vpn-cipher NAME                       Set cipher (default AES-256-GCM)
+- --vpn-auth NAME                         Set auth digest (default SHA256)
+- --vpn-tls-min TLS1_2                    Set VPN TLS minimum version (default TLS1_2)
+- --vpn-reneg-seconds N                   Set renegotiation seconds (default 43200)
 - --vpn-client-issue NAME                 Issue a client profile (NAME.ovpn)
 - --vpn-client-revoke NAME                Revoke a client profile
 - --vpn-human-add NAME --role=viewer|admin  Add a human with a per-human VPN cert and OS role
 - --vpn-human-revoke NAME                 Revoke a human’s VPN access
 - --vpn-human-rotate NAME                 Rotate a human’s VPN cert
 - --ssh-vpn-only-enable | --ssh-vpn-only-disable  Enforce or relax SSH VPN-only policy
+- --auto-lock-to-vpn-on-first-run true|false  Enable/disable auto-lock after first SSH-over-VPN (default true)
 
 TLS/certificates (private CA)
+- --tls-mode internalCA                   Set TLS mode (default internalCA)
+- --tls-zero-downtime-reload true|false   Enable zero-downtime reload for certs (default true)
 - --tls-rotation-days N                   Set monthly rotation period in days (e.g., 30) [writes tls.rotation.periodDays]
 - --tls-rotate-now                        Rotate server/client certs now (graceful reload)
+
+MongoDB
+- --mongodb-tls-min TLS1_2                Set mongod tlsMinVersion (default TLS1_2)
+- --mongodb-max-incoming N                Set mongod maxIncomingConnections (default 1024)
+- --app-allow-ddl true|false              Allow App DDL (default false)
+- --app-allow-index true|false            Allow App index operations (default false)
 
 App database access
 - --app-auto-approve-enable               Enable automatic just-in-time grants for new business DBs
 - --app-auto-approve-disable              Disable automatic grants
 - --app-denylist-add REGEX                Add a denylist pattern (prevents auto-grant for matching DB names)
 - --app-denylist-remove REGEX             Remove a denylist pattern
+- --app-exclude-db-add NAME               Add a DB name to exclude from auto-approve
+- --app-exclude-db-remove NAME            Remove a DB name from exclude list
 
 Backups (local-only)
 - --backup-enable | --backup-disable      Turn backups on/off
@@ -149,6 +167,11 @@ Backups (local-only)
 - --backup-quota-percent N                 Set max percent of filesystem used by backups
 - --backup-quota-max-gib N                 Set absolute cap (GiB)
 - --backup-min-free-gib N                  Ensure at least this much free space remains
+- --backup-target-dir PATH                 Set backup target directory
+- --backup-compression zstd                Set backup compression algorithm (default zstd)
+- --backup-encryption-type age             Set backup encryption type (default age)
+- --backup-encryption-key PATH             Set backup encryption key path
+- --backup-schedule auto|HH:MM             Set backup schedule (default auto)
 
 Principal network restrictions (advanced; per-principal client sources)
 - --root-allow-client-add CIDR            Add client source for Root principal
@@ -160,13 +183,34 @@ Principal network restrictions (advanced; per-principal client sources)
 - --backup-allow-client-add CIDR          Add client source for Backup principal
 - --backup-allow-client-remove CIDR       Remove client source for Backup principal
 
+Firewall
+- --fw-stealth-drop-public true|false     Enable default DROP on public interfaces (default true)
+- --fw-stealth-block-public-icmp true|false  Block ICMP echo on public interfaces (default true)
+- --fw-stealth-allow-vpn-icmp true|false  Allow ICMP on VPN interface (default true)
+- --fw-ovpn-rate-avg N                    Set OpenVPN port avg packets/sec limit (default 50)
+- --fw-ovpn-rate-burst N                  Set OpenVPN port burst packets (default 200)
+- --fw-mongo-per-source N                 Set per-source concurrent conn cap for 27017 (default 200)
+- --fw-mongo-new-per-sec N                Set new connections/sec for 27017 (default 20)
+- --fw-mongo-new-burst N                  Set new connection burst for 27017 (default 40)
+
 Update policy
 - --zero-downtime-preferred true|false    Prefer reload over restart (default true)
 - --warn-if-restart-required true|false   If restart is unavoidable, require explicit confirmation (default true)
 
 Onboarding (operator convenience)
+- --onboarding-method cloudflared            Set onboarding method (default cloudflared)
 - --onboarding-one-liner [--unix|--windows]  Generate a fresh short-lived URL and print the copy-paste one-liner
 - --onboarding-expiry MINUTES                Override link TTL (default 10)
+- --onboarding-single-use true|false         Single-use URL (default true)
+- --onboarding-include-readme true|false     Include README in archive (default false)
+- --onboarding-date-format YYYYMMDD          Set filename date format (default YYYYMMDD)
+
+Viewer chroot
+- --viewer-chroot-root PATH                 Set chroot root for viewer
+- --viewer-include-add PATH                 Add a path to includePaths
+- --viewer-include-remove PATH              Remove a path from includePaths
+- --viewer-exclude-add PATH                 Add a path to excludePaths
+- --viewer-exclude-remove PATH              Remove a path from excludePaths
 
 Backups (local-only, safe by default)
 - Schedule: daily, weekly (Sunday), monthly (1st) at 02:00 local by default; adjusts to the quietest hour as data is gathered.
@@ -344,7 +388,8 @@ Planned file changes (structure-preserving)
   - Verify VPN human roles: viewer chroot and no shell; admin shell+sudo; SSH VPN-only enforced.
 
 
-Planned configuration keys (concise)
+Configuration schema (defaults shown)
+This schema mirrors the Default configuration above; every key is configurable and has a corresponding CLI flag.
 - onboarding:
   - method: "cloudflared" | "disabled"
   - expiryMinutes: 10
