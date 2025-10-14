@@ -5,8 +5,10 @@
 set -euo pipefail
 
 # Script metadata
-readonly INSTALLER_VERSION="2.0.0"
-readonly UTILITY_NAME="mongodb-hardening"
+# Read installer version from VERSION file at project root
+source_dir="$(dirname "${BASH_SOURCE[0]}")"
+INSTALLER_VERSION="$(sed -n '1p' "$source_dir/VERSION" 2>/dev/null || echo "0.0.0")"
+readonly UTILITY_NAME="harden-mongo-server"
 
 # Installation paths
 readonly INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local}"
@@ -87,7 +89,6 @@ create_directories() {
         "$BIN_DIR"
         "$LIB_DIR"
         "$SHARE_DIR"
-        "$SHARE_DIR/examples"
         "$SHARE_DIR/docs"
         "$CONFIG_DIR"
         "/var/lib/$UTILITY_NAME"
@@ -115,7 +116,8 @@ create_directories() {
 install_libraries() {
     info "Installing library modules..."
     
-    local lib_source_dir="$(dirname "${BASH_SOURCE[0]}")/lib/mongodb-hardening"
+    local source_dir="$(dirname "${BASH_SOURCE[0]}")"
+local lib_source_dir="$source_dir/lib/harden-mongo-server"
     
     if [[ ! -d "$lib_source_dir" ]]; then
         fatal "Library source directory not found: $lib_source_dir"
@@ -123,6 +125,12 @@ install_libraries() {
     
     # Copy library modules
     cp -r "$lib_source_dir"/* "$LIB_DIR/"
+    # Install version file for runtime version resolution
+    if [[ -f "$source_dir/VERSION" ]]; then
+        cp "$source_dir/VERSION" "$LIB_DIR/VERSION"
+    else
+        echo "0.0.0" > "$LIB_DIR/VERSION"
+    fi
     
     # Set proper permissions
     find "$LIB_DIR" -name "*.sh" -exec chmod 644 {} \;
@@ -134,8 +142,8 @@ install_libraries() {
 install_executable() {
     info "Installing main executable..."
     
-    local source_script="$(dirname "${BASH_SOURCE[0]}")/harden-mongodb.sh"
-    local target_script="$BIN_DIR/harden-mongodb"
+    local source_script="$(dirname "${BASH_SOURCE[0]}")/harden-mongo-server"
+    local target_script="$BIN_DIR/harden-mongo-server"
     
     if [[ ! -f "$source_script" ]]; then
         fatal "Main script not found: $source_script"
@@ -145,7 +153,7 @@ install_executable() {
     cp "$source_script" "$target_script"
     
     # Update library path in the installed script
-    sed -i "s|readonly LIB_DIR=\"\$SCRIPT_DIR/lib/mongodb-hardening\"|readonly LIB_DIR=\"$LIB_DIR\"|" "$target_script"
+sed -i "s|readonly LIB_DIR=\"\$SCRIPT_DIR/lib/harden-mongo-server\"|readonly LIB_DIR=\"$LIB_DIR\"|" "$target_script"
     
     chmod 755 "$target_script"
     
@@ -163,13 +171,8 @@ install_documentation() {
         cp "$source_dir/README.md" "$SHARE_DIR/"
     fi
     
-    # Install examples
-    if [[ -d "$source_dir/examples" ]]; then
-        cp -r "$source_dir/examples"/* "$SHARE_DIR/examples/"
-    fi
-    
     # Install additional documentation
-    local doc_files=(CHANGELOG.md LICENSE CONTRIBUTING.md)
+    local doc_files=(CHANGELOG.md LICENSE)
     for doc in "${doc_files[@]}"; do
         if [[ -f "$source_dir/$doc" ]]; then
             cp "$source_dir/$doc" "$SHARE_DIR/docs/"
@@ -183,15 +186,15 @@ install_documentation() {
 create_symlink() {
     info "Creating system symlink..."
     
-    local system_bin="/usr/bin/harden-mongodb"
+    local system_bin="/usr/bin/harden-mongo-server"
     
     if [[ -L "$system_bin" ]] || [[ -f "$system_bin" ]]; then
         rm -f "$system_bin"
     fi
     
-    ln -s "$BIN_DIR/harden-mongodb" "$system_bin"
+    ln -s "$BIN_DIR/harden-mongo-server" "$system_bin"
     
-    success "System symlink created: $system_bin -> $BIN_DIR/harden-mongodb"
+    success "System symlink created: $system_bin -> $BIN_DIR/harden-mongo-server"
 }
 
 # Install systemd service files if systemd is available
@@ -206,7 +209,7 @@ install_systemd_services() {
     local service_dir="/etc/systemd/system"
     
     # Create monitoring service
-    cat > "$service_dir/mongodb-hardening-monitor.service" << 'EOF'
+cat > "$service_dir/harden-mongo-server-monitor.service" << 'EOF'
 [Unit]
 Description=MongoDB Hardening Monitor
 After=mongod.service
@@ -214,7 +217,7 @@ Requires=mongod.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/harden-mongodb health-check
+ExecStart=/usr/bin/harden-mongo-server health-check
 User=root
 StandardOutput=journal
 StandardError=journal
@@ -224,10 +227,10 @@ WantedBy=multi-user.target
 EOF
 
     # Create monitoring timer
-    cat > "$service_dir/mongodb-hardening-monitor.timer" << 'EOF'
+cat > "$service_dir/harden-mongo-server-monitor.timer" << 'EOF'
 [Unit]
 Description=MongoDB Hardening Monitor Timer
-Requires=mongodb-hardening-monitor.service
+Requires=harden-mongo-server-monitor.service
 
 [Timer]
 OnCalendar=*:0/5
@@ -238,7 +241,7 @@ WantedBy=timers.target
 EOF
 
     # Create metrics collection service
-    cat > "$service_dir/mongodb-hardening-metrics.service" << 'EOF'
+cat > "$service_dir/harden-mongo-server-metrics.service" << 'EOF'
 [Unit]
 Description=MongoDB Hardening Metrics Collection
 After=mongod.service
@@ -246,7 +249,7 @@ Requires=mongod.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/harden-mongodb metrics collect
+ExecStart=/usr/bin/harden-mongo-server metrics collect
 User=root
 StandardOutput=journal
 StandardError=journal
@@ -256,10 +259,10 @@ WantedBy=multi-user.target
 EOF
 
     # Create metrics timer
-    cat > "$service_dir/mongodb-hardening-metrics.timer" << 'EOF'
+cat > "$service_dir/harden-mongo-server-metrics.timer" << 'EOF'
 [Unit]
 Description=MongoDB Hardening Metrics Timer
-Requires=mongodb-hardening-metrics.service
+Requires=harden-mongo-server-metrics.service
 
 [Timer]
 OnCalendar=hourly
@@ -272,9 +275,9 @@ EOF
     # Reload systemd
     systemctl daemon-reload
     
-    success "systemd service files installed"
-    info "To enable monitoring: systemctl enable --now mongodb-hardening-monitor.timer"
-    info "To enable metrics: systemctl enable --now mongodb-hardening-metrics.timer"
+success "systemd service files installed"
+    info "To enable monitoring: systemctl enable --now harden-mongo-server-monitor.timer"
+    info "To enable metrics: systemctl enable --now harden-mongo-server-metrics.timer"
 }
 
 # Set up log rotation
@@ -301,7 +304,7 @@ EOF
 create_uninstaller() {
     info "Creating uninstaller..."
     
-    local uninstall_script="$BIN_DIR/uninstall-mongodb-hardening"
+local uninstall_script="$BIN_DIR/uninstall-harden-mongo-server"
     
     cat > "$uninstall_script" << EOF
 #!/usr/bin/env bash
@@ -313,18 +316,18 @@ echo "Uninstalling MongoDB Hardening Utility..."
 
 # Stop and disable services
 if command -v systemctl >/dev/null 2>&1; then
-    systemctl stop mongodb-hardening-monitor.timer 2>/dev/null || true
-    systemctl stop mongodb-hardening-metrics.timer 2>/dev/null || true
-    systemctl disable mongodb-hardening-monitor.timer 2>/dev/null || true
-    systemctl disable mongodb-hardening-metrics.timer 2>/dev/null || true
+systemctl stop harden-mongo-server-monitor.timer 2>/dev/null || true
+    systemctl stop harden-mongo-server-metrics.timer 2>/dev/null || true
+    systemctl disable harden-mongo-server-monitor.timer 2>/dev/null || true
+    systemctl disable harden-mongo-server-metrics.timer 2>/dev/null || true
 fi
 
 # Remove files and directories
 rm -rf "$LIB_DIR"
 rm -rf "$SHARE_DIR"
-rm -f "$BIN_DIR/harden-mongodb"
-rm -f "/usr/bin/harden-mongodb"
-rm -f "/etc/systemd/system/mongodb-hardening-"*
+rm -f "$BIN_DIR/harden-mongo-server"
+rm -f "/usr/bin/harden-mongo-server"
+rm -f "/etc/systemd/system/harden-mongo-server-"*
 rm -f "/etc/logrotate.d/$UTILITY_NAME"
 rm -f "$uninstall_script"
 
@@ -345,41 +348,40 @@ EOF
 show_summary() {
     cat << EOF
 
-${GREEN}✓ MongoDB Hardening Utility Installation Complete${NC}
+${GREEN}✓ MongoDB Server Hardening Tool Installation Complete${NC}
 
 Installation Details:
   Version: $INSTALLER_VERSION
-  Executable: $BIN_DIR/harden-mongodb
+  Executable: $BIN_DIR/harden-mongo-server
   Libraries: $LIB_DIR
   Documentation: $SHARE_DIR
   Configuration: $CONFIG_DIR
-  System Link: /usr/bin/harden-mongodb
+  System Link: /usr/bin/harden-mongo-server
 
 Usage:
-  harden-mongodb --help          Show help information
-  harden-mongodb system-info     Display system information
-  harden-mongodb configure       Run configuration wizard
-  harden-mongodb harden standard Apply standard security hardening
+  harden-mongo-server --help          Show help information
+  harden-mongo-server system-info     Display system information
+  harden-mongo-server configure       Run configuration wizard
+  harden-mongo-server harden standard Apply standard security hardening
 
 Optional Services:
-  systemctl enable --now mongodb-hardening-monitor.timer  # Enable monitoring
-  systemctl enable --now mongodb-hardening-metrics.timer  # Enable metrics
+systemctl enable --now harden-mongo-server-monitor.timer
+systemctl enable --now harden-mongo-server-metrics.timer
 
 To uninstall:
-  $BIN_DIR/uninstall-mongodb-hardening
+$BIN_DIR/uninstall-harden-mongo-server
 
 ${YELLOW}Next Steps:${NC}
 1. Review the documentation: $SHARE_DIR/README.md
-2. Check example configurations: $SHARE_DIR/examples/
-3. Run 'harden-mongodb system-info' to analyze your system
-4. Run 'harden-mongodb configure' for interactive setup
+3. Run 'harden-mongo-server system-info' to analyze your system
+4. Run 'harden-mongo-server configure' for interactive setup
 
 EOF
 }
 
 # Main installation function
 main() {
-    echo "MongoDB Hardening Utility Installer v$INSTALLER_VERSION"
+echo "MongoDB Server Hardening Tool Installer v$INSTALLER_VERSION"
     echo "============================================"
     echo
     

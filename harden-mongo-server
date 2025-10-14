@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Main Script
-# Comprehensive MongoDB security hardening and maintenance tool
+# MongoDB Server Hardening Tool - Main Script
+# A tool to harden MongoDB servers with comprehensive security and maintenance features
 
 # Script metadata
-readonly SCRIPT_NAME="harden-mongodb"
-readonly SCRIPT_VERSION="2.0.0"
-readonly SCRIPT_DESCRIPTION="MongoDB Security Hardening and Maintenance Utility"
-readonly SCRIPT_AUTHOR="MongoDB Hardening Project"
+readonly SCRIPT_NAME="harden-mongo-server"
+readonly SCRIPT_VERSION="$( { if [[ -f "$SCRIPT_DIR/VERSION" ]]; then sed -n '1p' "$SCRIPT_DIR/VERSION"; elif [[ -f "$LIB_DIR/VERSION" ]]; then sed -n '1p' "$LIB_DIR/VERSION"; elif [[ -f "/usr/local/lib/harden-mongo-server/VERSION" ]]; then sed -n '1p' "/usr/local/lib/harden-mongo-server/VERSION"; elif [[ -f "/usr/lib/harden-mongo-server/VERSION" ]]; then sed -n '1p' "/usr/lib/harden-mongo-server/VERSION"; else echo "0.0.0"; fi; } 2>/dev/null)"
+readonly SCRIPT_DESCRIPTION="MongoDB Server Hardening Tool"
+readonly SCRIPT_AUTHOR="harden-mongo-server project"
 
 # Get script directory
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly LIB_DIR="$SCRIPT_DIR/lib/mongodb-hardening"
+readonly LIB_DIR="$SCRIPT_DIR/lib/harden-mongo-server"
 
 # ================================
 # Core Module Loading
@@ -181,9 +181,9 @@ show_version() {
     echo
     
     # Only show extended info if modules are loaded
-    if [[ -n "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
         echo "Library Versions:"
-        echo "  Core: v$MONGODB_HARDENING_VERSION"
+echo "  Core: v$HARDEN_MONGO_SERVER_VERSION"
         if command -v get_mongodb_version >/dev/null 2>&1; then
             echo "  MongoDB: $(get_mongodb_version 2>/dev/null || echo 'Not detected')"
         fi
@@ -199,7 +199,7 @@ show_info() {
     
     case "$module" in
         all)
-            print_header "MongoDB Hardening Utility - Module Information"
+print_header "MongoDB Server Hardening Tool - Module Information"
             core_module_info 2>/dev/null || echo "Core module info not available"
             echo
             logging_module_info 2>/dev/null || echo "Logging module info not available"
@@ -569,25 +569,25 @@ parse_options() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             -v|--verbose)
-                export MONGODB_HARDENING_VERBOSE=true
+export HARDEN_MONGO_SERVER_VERBOSE=true
                 shift
                 ;;
             -d|--debug)
-                export MONGODB_HARDENING_DEBUG=true
-                export MONGODB_HARDENING_VERBOSE=true
-                export MONGODB_HARDENING_LOG_LEVEL=DEBUG
+export HARDEN_MONGO_SERVER_DEBUG=true
+                export HARDEN_MONGO_SERVER_VERBOSE=true
+                export HARDEN_MONGO_SERVER_LOG_LEVEL=DEBUG
                 shift
                 ;;
             -f|--force)
-                export MONGODB_HARDENING_FORCE=true
+export HARDEN_MONGO_SERVER_FORCE=true
                 shift
                 ;;
             -n|--dry-run)
-                export MONGODB_HARDENING_DRY_RUN=true
+export HARDEN_MONGO_SERVER_DRY_RUN=true
                 shift
                 ;;
             -c|--config)
-                export MONGODB_HARDENING_CONFIG_FILE="$2"
+export HARDEN_MONGO_SERVER_CONFIG_FILE="$2"
                 shift 2
                 ;;
             -h|--help)

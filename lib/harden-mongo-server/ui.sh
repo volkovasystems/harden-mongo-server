@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - User Interface Library
+# MongoDB Server Hardening Tool - User Interaction Library
 # Provides user interaction functions, prompts, and input validation
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_UI_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_UI_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_UI_LOADED=1
+readonly _HARDEN_MONGO_SERVER_UI_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
@@ -546,8 +546,8 @@ configuration_wizard() {
     
     if confirm "Apply this configuration" "y"; then
         # Save configuration to file
-        local config_file="$MONGODB_HARDENING_CONF_DIR/mongodb-hardening.conf"
-        create_dir_safe "$MONGODB_HARDENING_CONF_DIR" 755 root:root
+local config_file=\"$HARDEN_MONGO_SERVER_CONF_DIR/harden-mongo-server.conf\"
+create_dir_safe \"$HARDEN_MONGO_SERVER_CONF_DIR\" 755 root:root
         
         {
             echo "# MongoDB Hardening Configuration"
@@ -580,7 +580,7 @@ configuration_wizard() {
 # Module information
 ui_module_info() {
     cat << EOF
-MongoDB Hardening UI Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening UI Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Interactive prompts and input validation

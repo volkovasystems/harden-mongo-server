@@ -1,12 +1,12 @@
-# MongoDB Hardening Utility - Makefile
+# MongoDB Server Hardening Tool - Makefile
 # Build, test, and distribution automation
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # Project metadata
-PROJECT_NAME := mongodb-hardening
-PROJECT_VERSION := 2.0.0
+PROJECT_NAME := harden-mongo-server
+PROJECT_VERSION := $(shell sed -n '1p' VERSION 2>/dev/null || echo "0.0.0")
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -16,7 +16,7 @@ BUILD_DIR := build
 DIST_DIR := dist
 TEST_DIR := tests
 DOCS_DIR := docs
-LIB_DIR := lib/mongodb-hardening
+LIB_DIR := lib/harden-mongo-server
 EXAMPLES_DIR := examples
 
 # Installation paths
@@ -36,7 +36,7 @@ RED := \033[0;31m
 # Helper functions
 define print_header
 	@echo -e "$(BLUE)================================================$(NO_COLOR)"
-	@echo -e "$(BLUE) MongoDB Hardening Utility - $(1)$(NO_COLOR)"
+	@echo -e "$(BLUE) MongoDB Server Hardening Tool - $(1)$(NO_COLOR)"
 	@echo -e "$(BLUE)================================================$(NO_COLOR)"
 endef
 
@@ -56,7 +56,7 @@ endef
 .PHONY: help build test install uninstall clean lint format check package dev-setup
 
 help: ## Show this help message
-	@echo -e "$(BLUE)MongoDB Hardening Utility - Build System$(NO_COLOR)"
+	@echo -e "$(BLUE)MongoDB Server Hardening Tool - Build System$(NO_COLOR)"
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(NO_COLOR) %s\n", $$1, $$2}'
@@ -68,14 +68,12 @@ help: ## Show this help message
 build: ## Build the project
 	$(call print_header,Building Project)
 	@mkdir -p $(BUILD_DIR)
-	@cp harden-mongodb.sh $(BUILD_DIR)/harden-mongodb
-	@chmod +x $(BUILD_DIR)/harden-mongodb
-	@mkdir -p $(BUILD_DIR)/lib/mongodb-hardening
-	@cp -r $(LIB_DIR)/* $(BUILD_DIR)/lib/mongodb-hardening/
-	@mkdir -p $(BUILD_DIR)/examples
-	@cp examples/mongodb-hardening.conf.example $(BUILD_DIR)/examples/
+	@cp harden-mongo-server $(BUILD_DIR)/harden-mongo-server
+	@chmod +x $(BUILD_DIR)/harden-mongo-server
+	@mkdir -p $(BUILD_DIR)/lib/harden-mongo-server
+	@cp -r $(LIB_DIR)/* $(BUILD_DIR)/lib/harden-mongo-server/
 	@cp README.md LICENSE $(BUILD_DIR)/
-	@echo "$(PROJECT_VERSION)" > $(BUILD_DIR)/VERSION
+	@cp VERSION $(BUILD_DIR)/VERSION
 	$(call print_success,Build completed)
 
 test: ## Run tests
@@ -123,36 +121,36 @@ install: build ## Install the utility system-wide
 	
 	# Create directories
 	@mkdir -p $(BINDIR) $(LIBDIR) $(SHAREDIR) $(CONFIGDIR)
-	@mkdir -p $(SHAREDIR)/examples $(SHAREDIR)/docs
+	@mkdir -p $(SHAREDIR)/docs
 	@mkdir -p /var/lib/$(PROJECT_NAME) /var/log/$(PROJECT_NAME)
 	$(call print_success,Created directories)
 	
 	# Install executable
-	@cp $(BUILD_DIR)/harden-mongodb $(BINDIR)/
-	@chmod 755 $(BINDIR)/harden-mongodb
+	@cp $(BUILD_DIR)/harden-mongo-server $(BINDIR)/
+	@chmod 755 $(BINDIR)/harden-mongo-server
 	$(call print_success,Installed executable to $(BINDIR))
 	
 	# Install libraries
-	@cp -r $(BUILD_DIR)/lib/mongodb-hardening/* $(LIBDIR)/
+	@cp -r $(BUILD_DIR)/lib/harden-mongo-server/* $(LIBDIR)/
 	@find $(LIBDIR) -name "*.sh" -exec chmod 644 {} \;
+	@cp $(BUILD_DIR)/VERSION $(LIBDIR)/VERSION
 	$(call print_success,Installed libraries to $(LIBDIR))
 	
 	# Install documentation and examples
 	@if [ -f $(BUILD_DIR)/README.md ]; then cp $(BUILD_DIR)/README.md $(SHAREDIR)/; fi
-	@if [ -d $(BUILD_DIR)/examples ]; then cp -r $(BUILD_DIR)/examples/* $(SHAREDIR)/examples/; fi
 	@if [ -d $(BUILD_DIR)/docs ]; then cp -r $(BUILD_DIR)/docs/* $(SHAREDIR)/docs/; fi
 	$(call print_success,Installed documentation to $(SHAREDIR))
 	
 	# Update library path in installed script
-	@sed -i 's|readonly LIB_DIR="$$SCRIPT_DIR/lib/mongodb-hardening"|readonly LIB_DIR="$(LIBDIR)"|' $(BINDIR)/harden-mongodb
+	@sed -i 's|readonly LIB_DIR="$$SCRIPT_DIR/lib/harden-mongo-server"|readonly LIB_DIR="$(LIBDIR)"|' $(BINDIR)/harden-mongo-server
 	
 	# Create system symlink
-	@ln -sf $(BINDIR)/harden-mongodb /usr/bin/harden-mongodb
+	@ln -sf $(BINDIR)/harden-mongo-server /usr/bin/harden-mongo-server
 	$(call print_success,Created system symlink)
 	
 	@echo ""
 	@echo -e "$(GREEN)Installation completed successfully!$(NO_COLOR)"
-	@echo "Run 'harden-mongodb --help' to get started"
+	@echo "Run 'harden-mongo-server --help' to get started"
 
 uninstall: ## Uninstall the utility
 	$(call print_header,Uninstalling)
@@ -164,8 +162,8 @@ uninstall: ## Uninstall the utility
 	fi
 	
 	# Remove files
-	@rm -f $(BINDIR)/harden-mongodb
-	@rm -f /usr/bin/harden-mongodb
+	@rm -f $(BINDIR)/harden-mongo-server
+	@rm -f /usr/bin/harden-mongo-server
 	@rm -rf $(LIBDIR)
 	@rm -rf $(SHAREDIR)
 	$(call print_success,Removed installed files)
@@ -221,7 +219,7 @@ clean: ## Clean build artifacts
 	$(call print_success,Cleaned build artifacts)
 
 version: ## Show version information
-	@echo "MongoDB Hardening Utility"
+	@echo "MongoDB Server Hardening Tool"
 	@echo "Version: $(PROJECT_VERSION)"
 	@echo "Build Date: $(BUILD_DATE)"
 	@echo "Git Commit: $(GIT_COMMIT)"

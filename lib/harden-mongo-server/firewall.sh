@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Firewall Library
+# MongoDB Server Hardening Tool - Firewall Library
 # Provides firewall rule management for different firewall systems
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_FIREWALL_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_FIREWALL_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_FIREWALL_LOADED=1
+readonly _HARDEN_MONGO_SERVER_FIREWALL_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/system.sh"
 fi
 
@@ -724,7 +724,7 @@ setup_production_firewall() {
 # Module information
 firewall_module_info() {
     cat << EOF
-MongoDB Hardening Firewall Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Firewall Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Multi-firewall system support (UFW, FirewallD, IPTables, NFTables)

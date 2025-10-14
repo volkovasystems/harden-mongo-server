@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Monitoring Library  
+# MongoDB Server Hardening Tool - Monitoring Library  
 # Provides health checks, metrics collection, and monitoring setup functions
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_MONITORING_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_MONITORING_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_MONITORING_LOADED=1
+readonly _HARDEN_MONGO_SERVER_MONITORING_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/system.sh"
 fi
 
@@ -26,7 +26,7 @@ fi
 # ================================
 
 # Default monitoring settings
-readonly DEFAULT_METRICS_DIR="/var/lib/mongodb-hardening/metrics"
+readonly DEFAULT_METRICS_DIR="/var/lib/harden-mongo-server/metrics"
 readonly DEFAULT_LOG_RETENTION_DAYS="7"
 readonly DEFAULT_CHECK_INTERVAL="300"  # 5 minutes
 readonly DEFAULT_ALERT_THRESHOLD="80"  # 80%
@@ -603,10 +603,10 @@ setup_monitoring() {
     
     # Create monitoring directories
     create_dir_safe "$DEFAULT_METRICS_DIR" 755 mongodb:mongodb
-    create_dir_safe "/var/log/mongodb-hardening" 755 mongodb:mongodb
+create_dir_safe "/var/log/harden-mongo-server" 755 mongodb:mongodb
     
     # Create monitoring script
-    local monitoring_script="/usr/local/bin/mongodb-monitoring.sh"
+local monitoring_script="/usr/local/bin/harden-mongo-server-monitoring.sh"
     create_monitoring_script "$monitoring_script" "$check_interval" "$enable_metrics" "$metrics_interval" "$retention_days"
     
     # Setup cron jobs
@@ -631,12 +631,12 @@ create_monitoring_script() {
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Source the monitoring library
-source \"$(mongodb_hardening_lib_dir)/monitoring.sh\"
+source \"$(harden_mongo_server_lib_dir)/monitoring.sh\"
 
 # Configuration
 METRICS_DIR=\"$DEFAULT_METRICS_DIR\"
 RETENTION_DAYS=\"$retention_days\"
-LOG_FILE=\"/var/log/mongodb-hardening/monitoring.log\"
+LOG_FILE=\"/var/log/harden-mongo-server/monitoring.log\"
 
 # Logging function
 log_message() {
@@ -717,7 +717,7 @@ setup_monitoring_cron() {
     fi
     
     # Create cron file
-    local cron_file="/etc/cron.d/mongodb-monitoring"
+local cron_file="/etc/cron.d/harden-mongo-server-monitoring"
     local cron_content="# MongoDB monitoring cron jobs
 # Health checks
 $health_check_cron root $script_path health >/dev/null 2>&1"
@@ -741,8 +741,8 @@ $metrics_cron root $script_path metrics >/dev/null 2>&1"
 remove_monitoring() {
     info "Removing MongoDB monitoring setup"
     
-    local monitoring_script="/usr/local/bin/mongodb-monitoring.sh"
-    local cron_file="/etc/cron.d/mongodb-monitoring"
+local monitoring_script="/usr/local/bin/harden-mongo-server-monitoring.sh"
+    local cron_file="/etc/cron.d/harden-mongo-server-monitoring"
     
     # Remove cron job
     if [[ -f "$cron_file" ]]; then
@@ -785,7 +785,7 @@ This is an automated message from MongoDB Hardening Utility."
         echo "$full_message" | mail -s "$subject" "$recipient"
         success "Alert sent via email to $recipient"
     elif command_exists logger; then
-        logger -p daemon.warning -t mongodb-hardening "$subject: $message"
+logger -p daemon.warning -t harden-mongo-server "$subject: $message"
         info "Alert logged to syslog"
     else
         warn "No alerting mechanism available (install mail or logger)"
@@ -841,7 +841,7 @@ check_alert_thresholds() {
 # Module information
 monitoring_module_info() {
     cat << EOF
-MongoDB Hardening Monitoring Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Monitoring Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Comprehensive MongoDB health checking

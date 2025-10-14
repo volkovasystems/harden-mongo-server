@@ -7,8 +7,8 @@ set -euo pipefail
 # Test configuration
 readonly TEST_DIR="$(dirname "${BASH_SOURCE[0]}")"
 readonly PROJECT_ROOT="$(dirname "$TEST_DIR")"
-readonly LIB_DIR="$PROJECT_ROOT/lib/mongodb-hardening"
-readonly MAIN_SCRIPT="$PROJECT_ROOT/harden-mongodb.sh"
+readonly LIB_DIR="$PROJECT_ROOT/lib/harden-mongo-server"
+readonly MAIN_SCRIPT="$PROJECT_ROOT/harden-mongo-server"
 
 # Test results tracking
 declare -g TESTS_RUN=0
@@ -86,7 +86,7 @@ test_library_loading() {
                 echo "#!/usr/bin/env bash"
                 echo "set -euo pipefail"
                 echo "# Override variables to prevent directory creation during tests"
-                echo "export MONGODB_HARDENING_TEST_MODE=true"
+echo "export HARDEN_MONGO_SERVER_TEST_MODE=true"
                 echo "source '$lib_file' 2>/dev/null || exit 0"
                 echo "exit 0"
             } > "$test_script"
@@ -122,7 +122,7 @@ test_main_functionality() {
 
 # Run all tests
 run_tests() {
-    echo "MongoDB Hardening Utility - Test Runner"
+echo "MongoDB Server Hardening Tool - Test Runner"
     echo "======================================="
     echo
     

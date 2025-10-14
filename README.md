@@ -1,9 +1,9 @@
-# MongoDB Hardening Utility
+# MongoDB Server Hardening Tool
 
 A comprehensive, modular security hardening utility for MongoDB deployments.
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.0.0-blue.svg)](CHANGELOG.md)
 
 ## Features
 
@@ -28,27 +28,29 @@ sudo make install
 ### Basic Usage
 ```bash
 # Interactive configuration wizard
-sudo harden-mongodb configure
+sudo harden-mongo-server configure
 
 # Apply standard security hardening
-sudo harden-mongodb harden standard
+sudo harden-mongo-server harden standard
 
 # System analysis
-sudo harden-mongodb system-info
+sudo harden-mongo-server system-info
 
 # Security assessment
-sudo harden-mongodb security-check
+sudo harden-mongo-server security-check
 ```
 
 ## Project Structure
 
 ```
 harden-mongo-server/
-├── harden-mongodb.sh                    # Main executable
+├── harden-mongo-server                   # Main executable
+├── lib/
+│   └── harden-mongo-server/              # Core library modules
 ├── install.sh                           # System installer  
 ├── Makefile                             # Build system
 │
-├── lib/mongodb-hardening/               # Core library modules
+├── lib/harden-mongo-server/             # Core library modules
 │   ├── core.sh                         # Core utilities
 │   ├── logging.sh                      # Logging system
 │   ├── ui.sh                           # User interaction
@@ -60,9 +62,6 @@ harden-mongo-server/
 │   ├── backup.sh                       # Backup operations
 │   └── monitoring.sh                   # Health monitoring
 │
-├── examples/
-│   └── mongodb-hardening.conf.example  # Configuration template
-│
 ├── tests/
 │   ├── test-runner.sh                  # Test framework
 │   └── README.md                       # Test documentation
@@ -70,9 +69,7 @@ harden-mongo-server/
 └── Documentation
     ├── README.md
     ├── CHANGELOG.md
-    ├── CONTRIBUTING.md
     ├── LICENSE
-    └── MANIFEST.txt
 ```
 
 ## Security Profiles
@@ -104,36 +101,36 @@ harden-mongo-server/
 
 ### System Analysis
 ```bash
-harden-mongodb system-info        # Display system information
-harden-mongodb mongodb-status     # Show MongoDB service status
-harden-mongodb security-check     # Security configuration assessment
-harden-mongodb health-check       # MongoDB health monitoring
+harden-mongo-server system-info        # Display system information
+harden-mongo-server mongodb-status     # Show MongoDB service status
+harden-mongo-server security-check     # Security configuration assessment
+harden-mongo-server health-check       # MongoDB health monitoring
 ```
 
 ### Configuration & Hardening
 ```bash
-harden-mongodb configure          # Interactive configuration wizard
-harden-mongodb harden [PROFILE]   # Apply security hardening profile
-harden-mongodb setup-ssl          # Configure SSL/TLS encryption
-harden-mongodb setup-auth         # Setup authentication
-harden-mongodb setup-firewall     # Configure firewall rules
+harden-mongo-server configure          # Interactive configuration wizard
+harden-mongo-server harden [PROFILE]   # Apply security hardening profile
+harden-mongo-server setup-ssl          # Configure SSL/TLS encryption
+harden-mongo-server setup-auth         # Setup authentication
+harden-mongo-server setup-firewall     # Configure firewall rules
 ```
 
 ### Backup & Monitoring
 ```bash
-harden-mongodb backup             # Create backup
-harden-mongodb restore FILE       # Restore from backup
-harden-mongodb backup-schedule    # Setup automated backups
-harden-mongodb monitoring setup   # Configure monitoring
-harden-mongodb metrics collect    # Collect performance metrics
+harden-mongo-server backup             # Create backup
+harden-mongo-server restore FILE       # Restore from backup
+harden-mongo-server backup-schedule    # Setup automated backups
+harden-mongo-server monitoring setup   # Configure monitoring
+harden-mongo-server metrics collect    # Collect performance metrics
 ```
 
 ### Service Management
 ```bash
-harden-mongodb start              # Start MongoDB service
-harden-mongodb stop               # Stop MongoDB service
-harden-mongodb restart            # Restart MongoDB service
-harden-mongodb enable             # Enable auto-start
+harden-mongo-server start              # Start MongoDB service
+harden-mongo-server stop               # Stop MongoDB service
+harden-mongo-server restart            # Restart MongoDB service
+harden-mongo-server enable             # Enable auto-start
 ```
 
 ## Requirements
@@ -155,15 +152,6 @@ make package       # Create distribution packages
 make clean         # Clean build artifacts
 ```
 
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `make check`
-5. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 

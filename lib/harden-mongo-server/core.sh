@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Core Library
+# MongoDB Server Hardening Tool - Core Library
 # Provides common utilities, constants, and base functionality
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_CORE_LOADED=1
+readonly _HARDEN_MONGO_SERVER_CORE_LOADED=1
 
 # ================================
 # Core Constants and Configuration
 # ================================
 
 # Script metadata
-readonly MONGODB_HARDENING_VERSION="2.0.0"
-readonly MONGODB_HARDENING_NAME="MongoDB Hardening Utility"
-readonly MONGODB_HARDENING_DESCRIPTION="Comprehensive MongoDB security hardening and maintenance utility"
+readonly HARDEN_MONGO_SERVER_VERSION="$( { lib_dir=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"; parent_dir=\"$(cd \"$lib_dir/..\" && pwd)\"; if [[ -f \"$lib_dir/VERSION\" ]]; then sed -n '1p' \"$lib_dir/VERSION\"; elif [[ -f \"$parent_dir/VERSION\" ]]; then sed -n '1p' \"$parent_dir/VERSION\"; else echo \"0.0.0\"; fi; } 2>/dev/null)"
+readonly HARDEN_MONGO_SERVER_NAME="MongoDB Server Hardening Tool"
+readonly HARDEN_MONGO_SERVER_DESCRIPTION="A tool to harden MongoDB servers with comprehensive security and maintenance features"
 
 # Default paths and directories
 readonly DEFAULT_DB_PATH="/var/lib/mongodb"
@@ -25,30 +25,30 @@ readonly DEFAULT_CA_DIR="/etc/mongoCA"
 readonly DEFAULT_CLIENT_DIR="/etc/mongoCA/clients"
 
 # Configuration file paths
-readonly MONGODB_HARDENING_CONF_DIR="/etc/mongodb-hardening"
-readonly MONGODB_HARDENING_LIB_DIR="/usr/lib/mongodb-hardening"
-readonly MONGODB_HARDENING_SHARE_DIR="/usr/share/mongodb-hardening"
-readonly MONGODB_HARDENING_VAR_DIR="/var/lib/mongodb-hardening"
-readonly MONGODB_HARDENING_LOG_DIR="/var/log/mongodb-hardening"
+readonly HARDEN_MONGO_SERVER_CONF_DIR="/etc/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_LIB_DIR="/usr/lib/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_SHARE_DIR="/usr/share/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_VAR_DIR="/var/lib/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_LOG_DIR="/var/log/harden-mongo-server"
 
 # Runtime directories
-readonly MONGODB_HARDENING_RUN_DIR="/var/run/mongodb-hardening"
-readonly MONGODB_HARDENING_TEMP_DIR="${TMPDIR:-/tmp}/mongodb-hardening"
+readonly HARDEN_MONGO_SERVER_RUN_DIR="/var/run/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_TEMP_DIR="${TMPDIR:-/tmp}/harden-mongo-server"
 
 # ================================
 # Global Variables
 # ================================
 
 # Execution context
-declare -g MONGODB_HARDENING_VERBOSE=${MONGODB_HARDENING_VERBOSE:-false}
-declare -g MONGODB_HARDENING_DEBUG=${MONGODB_HARDENING_DEBUG:-false}
-declare -g MONGODB_HARDENING_DRY_RUN=${MONGODB_HARDENING_DRY_RUN:-false}
-declare -g MONGODB_HARDENING_FORCE=${MONGODB_HARDENING_FORCE:-false}
+declare -g HARDEN_MONGO_SERVER_VERBOSE=${HARDEN_MONGO_SERVER_VERBOSE:-false}
+declare -g HARDEN_MONGO_SERVER_DEBUG=${HARDEN_MONGO_SERVER_DEBUG:-false}
+declare -g HARDEN_MONGO_SERVER_DRY_RUN=${HARDEN_MONGO_SERVER_DRY_RUN:-false}
+declare -g HARDEN_MONGO_SERVER_FORCE=${HARDEN_MONGO_SERVER_FORCE:-false}
 
 # Counters for summary
-declare -gi MONGODB_HARDENING_ISSUES_FOUND=0
-declare -gi MONGODB_HARDENING_ISSUES_FIXED=0
-declare -gi MONGODB_HARDENING_WARNINGS=0
+declare -gi HARDEN_MONGO_SERVER_ISSUES_FOUND=0
+declare -gi HARDEN_MONGO_SERVER_ISSUES_FIXED=0
+declare -gi HARDEN_MONGO_SERVER_WARNINGS=0
 
 # Color codes for output
 readonly COLOR_RED='\033[0;31m'
@@ -75,9 +75,9 @@ readonly ICON_EXPLAIN="📋"
 # ================================
 
 # Get the library directory path
-mongodb_hardening_lib_dir() {
-    if [[ -d "$MONGODB_HARDENING_LIB_DIR" ]]; then
-        echo "$MONGODB_HARDENING_LIB_DIR"
+harden_mongo_server_lib_dir() {
+    if [[ -d "$HARDEN_MONGO_SERVER_LIB_DIR" ]]; then
+        echo "$HARDEN_MONGO_SERVER_LIB_DIR"
     else
         # Fallback to relative path from script location
         local script_dir
@@ -91,7 +91,7 @@ mongodb_hardening_lib_dir() {
 load_module() {
     local module_name="$1"
     local lib_dir
-    lib_dir="$(mongodb_hardening_lib_dir)"
+lib_dir="$(harden_mongo_server_lib_dir)"
     local module_path="$lib_dir/${module_name}.sh"
     
     if [[ ! -f "$module_path" ]]; then
@@ -214,7 +214,7 @@ create_dir_safe() {
     local owner="${3:-root:root}"
     
     # Skip directory creation in test mode
-    if [[ "${MONGODB_HARDENING_TEST_MODE:-false}" == "true" ]]; then
+if [[ "${HARDEN_MONGO_SERVER_TEST_MODE:-false}" == "true" ]]; then
         return 0
     fi
     
@@ -228,14 +228,14 @@ create_dir_safe() {
 # Create temporary directory
 create_temp_dir() {
     local temp_dir
-    temp_dir=$(mktemp -d "${MONGODB_HARDENING_TEMP_DIR}/mongodb-hardening.XXXXXX")
+temp_dir=$(mktemp -d "${HARDEN_MONGO_SERVER_TEMP_DIR}/harden-mongo-server.XXXXXX")
     echo "$temp_dir"
 }
 
 # Cleanup function for traps
-cleanup_mongodb_hardening() {
+cleanup_harden_mongo_server() {
     local temp_dirs
-    temp_dirs=$(find "${MONGODB_HARDENING_TEMP_DIR}" -name "mongodb-hardening.*" -type d 2>/dev/null || true)
+temp_dirs=$(find "${HARDEN_MONGO_SERVER_TEMP_DIR}" -name "harden-mongo-server.*" -type d 2>/dev/null || true)
     
     if [[ -n "$temp_dirs" ]]; then
         rm -rf $temp_dirs
@@ -244,15 +244,15 @@ cleanup_mongodb_hardening() {
 
 # Set up signal handlers
 setup_signal_handlers() {
-    trap 'cleanup_mongodb_hardening; exit 130' INT TERM
-    trap 'cleanup_mongodb_hardening' EXIT
+trap 'cleanup_harden_mongo_server; exit 130' INT TERM
+    trap 'cleanup_harden_mongo_server' EXIT
 }
 
 # Initialize the core module
-init_mongodb_hardening_core() {
+init_harden_mongo_server_core() {
     # Create required directories
-    create_dir_safe "$MONGODB_HARDENING_TEMP_DIR" 755 root:root
-    create_dir_safe "$MONGODB_HARDENING_RUN_DIR" 755 root:root
+create_dir_safe "$HARDEN_MONGO_SERVER_TEMP_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_RUN_DIR" 755 root:root
     
     # Set up signal handlers
     setup_signal_handlers
@@ -265,13 +265,13 @@ init_mongodb_hardening_core() {
 
 # Version information
 version() {
-    echo "$MONGODB_HARDENING_NAME v$MONGODB_HARDENING_VERSION"
+echo "$HARDEN_MONGO_SERVER_NAME v$HARDEN_MONGO_SERVER_VERSION"
 }
 
 # Module information
 module_info() {
     cat << EOF
-MongoDB Hardening Core Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Core Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Core constants and configuration
@@ -307,8 +307,8 @@ validate_core_requirements() {
 }
 
 # Auto-initialize when sourced (unless explicitly disabled)
-if [[ "${MONGODB_HARDENING_NO_AUTO_INIT:-false}" != "true" ]]; then
+if [[ "${HARDEN_MONGO_SERVER_NO_AUTO_INIT:-false}" != "true" ]]; then
     if validate_core_requirements; then
-        init_mongodb_hardening_core
+        init_harden_mongo_server_core
     fi
 fi

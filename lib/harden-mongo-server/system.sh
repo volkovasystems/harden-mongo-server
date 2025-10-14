@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - System Library
+# MongoDB Server Hardening Tool - System Library
 # Provides system environment detection, validation, and compatibility checks
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_SYSTEM_LOADED=1
+readonly _HARDEN_MONGO_SERVER_SYSTEM_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
@@ -594,7 +594,7 @@ generate_system_report() {
 # Module information
 system_module_info() {
     cat << EOF
-MongoDB Hardening System Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening System Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Linux distribution detection and identification

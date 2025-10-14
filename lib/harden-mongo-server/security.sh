@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Security Library
+# MongoDB Server Hardening Tool - Security Library
 # Provides advanced security hardening, authentication, and access control functions
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_SECURITY_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_SECURITY_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_SECURITY_LOADED=1
+readonly _HARDEN_MONGO_SERVER_SECURITY_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/system.sh"
 fi
 
@@ -698,7 +698,7 @@ security_vulnerability_check() {
 # Module information
 security_module_info() {
     cat << EOF
-MongoDB Hardening Security Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Security Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Authentication mechanism configuration (SCRAM-SHA-1/256)

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - MongoDB Library
+# MongoDB Server Hardening Tool - MongoDB Library
 # Provides MongoDB-specific functions for service management, configuration, and database operations
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_MONGODB_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_MONGODB_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_MONGODB_LOADED=1
+readonly _HARDEN_MONGO_SERVER_MONGODB_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/system.sh"
 fi
 
@@ -656,7 +656,7 @@ check_mongodb_security() {
 # Module information
 mongodb_module_info() {
     cat << EOF
-MongoDB Hardening MongoDB Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening MongoDB Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - MongoDB service management (start, stop, restart, enable)

@@ -209,75 +209,75 @@ Automatic alerts are generated for:
 ### **Normal Operation with Fail-safe**
 ```bash
 # Run hardening with full protection
-./harden-mongo-server.sh
+./harden-mongo-server
 
 # If interrupted, simply run again to resume
-./harden-mongo-server.sh
+./harden-mongo-server
 ```
 
 ### **Recovery Operations**
 ```bash
 # Force recovery mode
-./harden-mongo-server.sh --recovery
+./harden-mongo-server --recovery
 
 # Check system health
-./harden-mongo-server.sh --check
+./harden-mongo-server --check
 
 # View current status
-./harden-mongo-server.sh --status
+./harden-mongo-server --status
 ```
 
 ### **Rollback Operations**
 ```bash
 # Rollback just security changes
-./harden-mongo-server.sh --rollback security
+./harden-mongo-server --rollback security
 
 # Complete rollback to original state
-./harden-mongo-server.sh --rollback full
+./harden-mongo-server --rollback full
 
 # Rollback only monitoring components
-./harden-mongo-server.sh --rollback monitoring
+./harden-mongo-server --rollback monitoring
 ```
 
 ### **Monitoring Commands**
 ```bash
 # View watchdog status
-ps aux | grep mongodb-watchdog
+ps aux | grep harden-mongo-server-watchdog
 
 # Check recent recovery activity
-tail -f /var/lib/mongodb-hardening/recovery.log
+tail -f /var/lib/harden-mongo-server/recovery.log
 
 # View health check results
-tail -f /var/lib/mongodb-hardening/health-check.log
+tail -f /var/lib/harden-mongo-server/health-check.log
 ```
 
 ## 🔧 Technical Implementation
 
 ### **File Locations**
-- **State tracking**: `/var/lib/mongodb-hardening/hardening-state.json`
-- **Recovery logs**: `/var/lib/mongodb-hardening/recovery.log`
-- **Watchdog script**: `/var/lib/mongodb-hardening/mongodb-watchdog.sh`
-- **Health checks**: `/var/lib/mongodb-hardening/health-check.sh`
-- **Auto-recovery**: `/var/lib/mongodb-hardening/auto-recovery.sh`
-- **Rollback script**: `/var/lib/mongodb-hardening/rollback.sh`
-- **System backups**: `/var/lib/mongodb-hardening/backups/`
+- **State tracking**: `/var/lib/harden-mongo-server/hardening-state.json`
+- **Recovery logs**: `/var/lib/harden-mongo-server/recovery.log`
+- **Watchdog script**: `/var/lib/harden-mongo-server/harden-mongo-server-watchdog.sh`
+- **Health checks**: `/var/lib/harden-mongo-server/harden-mongo-server-health-check.sh`
+- **Auto-recovery**: `/var/lib/harden-mongo-server/harden-mongo-server-auto-recovery.sh`
+- **Rollback script**: `/var/lib/harden-mongo-server/rollback.sh`
+- **System backups**: `/var/lib/harden-mongo-server/backups/`
 
 ### **Cron Jobs Installed**
 ```bash
 # Health checks every 5 minutes
-*/5 * * * * /var/lib/mongodb-hardening/health-check.sh
+*/5 * * * * /var/lib/harden-mongo-server/harden-mongo-server-health-check.sh
 
 # Auto-recovery every 10 minutes  
-*/10 * * * * /var/lib/mongodb-hardening/auto-recovery.sh
+*/10 * * * * /var/lib/harden-mongo-server/harden-mongo-server-auto-recovery.sh
 
 # Daily backups at 2 AM
-0 2 * * * /var/lib/mongodb-hardening/backup-mongodb.sh
+0 2 * * * /var/lib/harden-mongo-server/backup-mongodb.sh
 
 # Weekly maintenance on Sundays at 3 AM
-0 3 * * 0 /var/lib/mongodb-hardening/maintenance.sh
+0 3 * * 0 /var/lib/harden-mongo-server/maintenance.sh
 
 # Monthly certificate renewal on 1st at 4 AM
-0 4 1 * * /var/lib/mongodb-hardening/renew-certificates.sh
+0 4 1 * * /var/lib/harden-mongo-server/renew-certificates.sh
 ```
 
 ## 🛠️ Advanced Features

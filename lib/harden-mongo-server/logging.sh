@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Logging Library
+# MongoDB Server Hardening Tool - Logging Library
 # Provides structured logging, output formatting, and progress reporting
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_LOGGING_LOADED=1
+readonly _HARDEN_MONGO_SERVER_LOGGING_LOADED=1
 
 # Load core module if not already loaded
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
@@ -18,12 +18,12 @@ fi
 # ================================
 
 # Default log configuration
-declare -g MONGODB_HARDENING_LOG_LEVEL=${MONGODB_HARDENING_LOG_LEVEL:-INFO}
-declare -g MONGODB_HARDENING_LOG_FILE=${MONGODB_HARDENING_LOG_FILE:-"${MONGODB_HARDENING_LOG_DIR}/mongodb-hardening.log"}
-declare -g MONGODB_HARDENING_LOG_TO_FILE=${MONGODB_HARDENING_LOG_TO_FILE:-true}
-declare -g MONGODB_HARDENING_LOG_TO_SYSLOG=${MONGODB_HARDENING_LOG_TO_SYSLOG:-false}
-declare -g MONGODB_HARDENING_USE_COLORS=${MONGODB_HARDENING_USE_COLORS:-true}
-declare -g MONGODB_HARDENING_TIMESTAMP_FORMAT=${MONGODB_HARDENING_TIMESTAMP_FORMAT:-"%Y-%m-%d %H:%M:%S"}
+declare -g HARDEN_MONGO_SERVER_LOG_LEVEL=${HARDEN_MONGO_SERVER_LOG_LEVEL:-INFO}
+declare -g HARDEN_MONGO_SERVER_LOG_FILE=${HARDEN_MONGO_SERVER_LOG_FILE:-"${HARDEN_MONGO_SERVER_LOG_DIR}/harden-mongo-server.log"}
+declare -g HARDEN_MONGO_SERVER_LOG_TO_FILE=${HARDEN_MONGO_SERVER_LOG_TO_FILE:-true}
+declare -g HARDEN_MONGO_SERVER_LOG_TO_SYSLOG=${HARDEN_MONGO_SERVER_LOG_TO_SYSLOG:-false}
+declare -g HARDEN_MONGO_SERVER_USE_COLORS=${HARDEN_MONGO_SERVER_USE_COLORS:-true}
+declare -g HARDEN_MONGO_SERVER_TIMESTAMP_FORMAT=${HARDEN_MONGO_SERVER_TIMESTAMP_FORMAT:-"%Y-%m-%d %H:%M:%S"}
 
 # Log levels (numeric for comparison)
 declare -gA LOG_LEVELS=(
@@ -35,7 +35,7 @@ declare -gA LOG_LEVELS=(
 )
 
 # Current log level numeric value
-declare -gi CURRENT_LOG_LEVEL=${LOG_LEVELS[${MONGODB_HARDENING_LOG_LEVEL}]:-1}
+declare -gi CURRENT_LOG_LEVEL=${LOG_LEVELS[${HARDEN_MONGO_SERVER_LOG_LEVEL}]:-1}
 
 # ================================
 # Color and Formatting Functions
@@ -43,7 +43,7 @@ declare -gi CURRENT_LOG_LEVEL=${LOG_LEVELS[${MONGODB_HARDENING_LOG_LEVEL}]:-1}
 
 # Check if colors should be used
 use_colors() {
-    [[ "$MONGODB_HARDENING_USE_COLORS" == "true" ]] && [[ -t 1 ]]
+[[ "$HARDEN_MONGO_SERVER_USE_COLORS" == "true" ]]
 }
 
 # Apply color/formatting to text
@@ -77,7 +77,7 @@ format_with_icon() {
 
 # Get formatted timestamp
 get_timestamp() {
-    date "+${MONGODB_HARDENING_TIMESTAMP_FORMAT}"
+date "+${HARDEN_MONGO_SERVER_TIMESTAMP_FORMAT}"
 }
 
 # Get ISO timestamp for logs
@@ -92,22 +92,22 @@ get_iso_timestamp() {
 # Initialize logging subsystem
 init_logging() {
     # Skip logging setup in test mode
-    if [[ "${MONGODB_HARDENING_TEST_MODE:-false}" == "true" ]]; then
-        MONGODB_HARDENING_LOG_TO_FILE=false
-        MONGODB_HARDENING_LOG_TO_SYSLOG=false
+if [[ "${HARDEN_MONGO_SERVER_TEST_MODE:-false}" == "true" ]]; then
+        HARDEN_MONGO_SERVER_LOG_TO_FILE=false
+        HARDEN_MONGO_SERVER_LOG_TO_SYSLOG=false
         return 0
     fi
     
     # Create log directory if needed
-    if [[ "$MONGODB_HARDENING_LOG_TO_FILE" == "true" ]]; then
+if [[ "$HARDEN_MONGO_SERVER_LOG_TO_FILE" == "true" ]]; then
         local log_dir
-        log_dir="$(dirname "$MONGODB_HARDENING_LOG_FILE")"
+log_dir="$(dirname "$HARDEN_MONGO_SERVER_LOG_FILE")"
         create_dir_safe "$log_dir" 755 root:root
         
         # Test write access to log file
-        if ! touch "$MONGODB_HARDENING_LOG_FILE" 2>/dev/null; then
-            MONGODB_HARDENING_LOG_TO_FILE=false
-            echo "Warning: Cannot write to log file $MONGODB_HARDENING_LOG_FILE, disabling file logging" >&2
+if ! touch "$HARDEN_MONGO_SERVER_LOG_FILE" 2>/dev/null; then
+            HARDEN_MONGO_SERVER_LOG_TO_FILE=false
+            echo "Warning: Cannot write to log file $HARDEN_MONGO_SERVER_LOG_FILE, disabling file logging" >&2
         fi
     fi
 }
@@ -124,8 +124,8 @@ write_to_log_file() {
     local level="$1"
     local message="$2"
     
-    if [[ "$MONGODB_HARDENING_LOG_TO_FILE" == "true" ]]; then
-        echo "[$(get_iso_timestamp)] [$level] $message" >> "$MONGODB_HARDENING_LOG_FILE"
+if [[ "$HARDEN_MONGO_SERVER_LOG_TO_FILE" == "true" ]]; then
+        echo "[$(get_iso_timestamp)] [$level] $message" >> "$HARDEN_MONGO_SERVER_LOG_FILE"
     fi
 }
 
@@ -135,7 +135,7 @@ write_to_syslog() {
     local message="$2"
     local priority
     
-    if [[ "$MONGODB_HARDENING_LOG_TO_SYSLOG" == "true" ]] && command_exists logger; then
+if [[ "$HARDEN_MONGO_SERVER_LOG_TO_SYSLOG" == "true" ]] && command_exists logger; then
         case "$level" in
             DEBUG) priority="user.debug" ;;
             INFO)  priority="user.info" ;;
@@ -145,7 +145,7 @@ write_to_syslog() {
             *)     priority="user.info" ;;
         esac
         
-        logger -p "$priority" -t "mongodb-hardening" "$message"
+logger -p "$priority" -t "harden-mongo-server" "$message"
     fi
 }
 
@@ -212,7 +212,7 @@ success() {
 warn() {
     local message="$1"
     log_message "WARN" "$message" "$ICON_WARNING" "$COLOR_YELLOW"
-    ((MONGODB_HARDENING_WARNINGS++))
+((HARDEN_MONGO_SERVER_WARNINGS++))
 }
 
 # Error messages
@@ -238,7 +238,7 @@ security() {
 fixed() {
     local message="$1"
     log_message "INFO" "$message" "$ICON_FIXED" "$COLOR_GREEN"
-    ((MONGODB_HARDENING_ISSUES_FIXED++))
+((HARDEN_MONGO_SERVER_ISSUES_FIXED++))
 }
 
 # Explanation/detailed messages
@@ -362,7 +362,7 @@ report_issue() {
     local description="$2"
     local recommendation="${3:-}"
     
-    ((MONGODB_HARDENING_ISSUES_FOUND++))
+((HARDEN_MONGO_SERVER_ISSUES_FOUND++))
     
     case "$severity" in
         high|critical)
@@ -402,24 +402,24 @@ report_fix() {
 
 # Print execution summary
 print_summary() {
-    local operation="${1:-MongoDB Hardening}"
+local operation="${1:-MongoDB Server Hardening}"
     
     print_header "Execution Summary"
     
     print_kv "Operation" "$operation"
     print_kv "Timestamp" "$(get_timestamp)"
-    print_kv "Issues Found" "$MONGODB_HARDENING_ISSUES_FOUND"
-    print_kv "Issues Fixed" "$MONGODB_HARDENING_ISSUES_FIXED"
-    print_kv "Warnings" "$MONGODB_HARDENING_WARNINGS"
+print_kv "Issues Found" "$HARDEN_MONGO_SERVER_ISSUES_FOUND"
+    print_kv "Issues Fixed" "$HARDEN_MONGO_SERVER_ISSUES_FIXED"
+    print_kv "Warnings" "$HARDEN_MONGO_SERVER_WARNINGS"
     
     echo
     
-    if ((MONGODB_HARDENING_ISSUES_FOUND == 0)); then
+if ((HARDEN_MONGO_SERVER_ISSUES_FOUND == 0)); then
         success "No security issues found - system appears properly configured"
-    elif ((MONGODB_HARDENING_ISSUES_FIXED == MONGODB_HARDENING_ISSUES_FOUND)); then
+    elif ((HARDEN_MONGO_SERVER_ISSUES_FIXED == HARDEN_MONGO_SERVER_ISSUES_FOUND)); then
         success "All identified issues have been resolved"
     else
-        local remaining=$((MONGODB_HARDENING_ISSUES_FOUND - MONGODB_HARDENING_ISSUES_FIXED))
+local remaining=$((HARDEN_MONGO_SERVER_ISSUES_FOUND - HARDEN_MONGO_SERVER_ISSUES_FIXED))
         warn "$remaining issue(s) require manual attention"
     fi
 }
@@ -433,7 +433,7 @@ execute_or_simulate() {
     local description="$1"
     local command="$2"
     
-    if [[ "$MONGODB_HARDENING_DRY_RUN" == "true" ]]; then
+if [[ "$HARDEN_MONGO_SERVER_DRY_RUN" == "true" ]]; then
         info "[DRY RUN] Would execute: $description"
         debug "Command: $command"
     else
@@ -445,7 +445,7 @@ execute_or_simulate() {
 
 # Check if in dry-run mode
 is_dry_run() {
-    [[ "$MONGODB_HARDENING_DRY_RUN" == "true" ]]
+[[ "$HARDEN_MONGO_SERVER_DRY_RUN" == "true" ]]
 }
 
 # ================================
@@ -455,14 +455,14 @@ is_dry_run() {
 # Verbose output
 verbose() {
     local message="$1"
-    if [[ "$MONGODB_HARDENING_VERBOSE" == "true" ]]; then
+if [[ "$HARDEN_MONGO_SERVER_VERBOSE" == "true" ]]; then
         debug "$message"
     fi
 }
 
 # Check if verbose mode is enabled
 is_verbose() {
-    [[ "$MONGODB_HARDENING_VERBOSE" == "true" ]]
+[[ "$HARDEN_MONGO_SERVER_VERBOSE" == "true" ]]
 }
 
 # ================================
@@ -476,7 +476,7 @@ confirm() {
     local response
     
     # Skip confirmation in force mode
-    if [[ "$MONGODB_HARDENING_FORCE" == "true" ]]; then
+if [[ "$HARDEN_MONGO_SERVER_FORCE" == "true" ]]; then
         info "Force mode enabled, proceeding without confirmation"
         return 0
     fi
@@ -525,7 +525,7 @@ confirm() {
 # Module information
 logging_module_info() {
     cat << EOF
-MongoDB Hardening Logging Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Logging Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Structured logging with multiple levels (DEBUG, INFO, WARN, ERROR, FATAL)
@@ -537,11 +537,11 @@ This module provides:
 - Dry-run simulation support
 
 Configuration:
-- MONGODB_HARDENING_LOG_LEVEL: Current log level ($MONGODB_HARDENING_LOG_LEVEL)
-- MONGODB_HARDENING_LOG_FILE: Log file path ($MONGODB_HARDENING_LOG_FILE)
-- MONGODB_HARDENING_USE_COLORS: Color output ($MONGODB_HARDENING_USE_COLORS)
-- MONGODB_HARDENING_VERBOSE: Verbose mode ($MONGODB_HARDENING_VERBOSE)
-- MONGODB_HARDENING_DRY_RUN: Dry run mode ($MONGODB_HARDENING_DRY_RUN)
+- HARDEN_MONGO_SERVER_LOG_LEVEL: Current log level ($HARDEN_MONGO_SERVER_LOG_LEVEL)
+- HARDEN_MONGO_SERVER_LOG_FILE: Log file path ($HARDEN_MONGO_SERVER_LOG_FILE)
+- HARDEN_MONGO_SERVER_USE_COLORS: Color output ($HARDEN_MONGO_SERVER_USE_COLORS)
+- HARDEN_MONGO_SERVER_VERBOSE: Verbose mode ($HARDEN_MONGO_SERVER_VERBOSE)
+- HARDEN_MONGO_SERVER_DRY_RUN: Dry run mode ($HARDEN_MONGO_SERVER_DRY_RUN)
 
 Dependencies: core.sh
 EOF

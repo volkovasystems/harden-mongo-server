@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# MongoDB Hardening Utility - Backup Library
+# MongoDB Server Hardening Tool - Backup Library
 # Provides backup and restore operations, scheduling, and maintenance functions
 
 # Prevent multiple inclusion
-if [[ -n "${_MONGODB_HARDENING_BACKUP_LOADED:-}" ]]; then
+if [[ -n "${_HARDEN_MONGO_SERVER_BACKUP_LOADED:-}" ]]; then
     return 0
 fi
-readonly _MONGODB_HARDENING_BACKUP_LOADED=1
+readonly _HARDEN_MONGO_SERVER_BACKUP_LOADED=1
 
 # Load required modules
-if [[ -z "${_MONGODB_HARDENING_CORE_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_CORE_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/core.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_LOGGING_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_LOGGING_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/logging.sh"
 fi
 
-if [[ -z "${_MONGODB_HARDENING_SYSTEM_LOADED:-}" ]]; then
+if [[ -z "${_HARDEN_MONGO_SERVER_SYSTEM_LOADED:-}" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/system.sh"
 fi
 
@@ -163,7 +163,7 @@ create_backup_metadata() {
     \"size\": \"$backup_size\",
     \"mongodb_version\": \"$(get_mongodb_version)\",
     \"hostname\": \"$(hostname)\",
-    \"created_by\": \"mongodb-hardening v$MONGODB_HARDENING_VERSION\"
+created_by\\": \\\"harden-mongo-server v$HARDEN_MONGO_SERVER_VERSION\\\"
   },
   \"system_info\": {
     \"os\": \"$(get_os)\",
@@ -515,7 +515,7 @@ schedule_backup() {
     local schedule="${1:-0 2 * * *}"  # Default: daily at 2 AM
     local backup_type="${2:-full}"
     local retention_days="${3:-$DEFAULT_RETENTION_DAYS}"
-    local script_path="${4:-/usr/local/bin/mongodb-backup.sh}"
+local script_path=\"${4:-/usr/local/bin/harden-mongo-server-backup.sh}\"
     
     info "Scheduling automated MongoDB backups"
     
@@ -523,8 +523,8 @@ schedule_backup() {
     create_backup_script "$script_path" "$backup_type" "$retention_days"
     
     # Add cron job
-    local cron_entry="$schedule root $script_path >/var/log/mongodb-backup.log 2>&1"
-    local cron_file="/etc/cron.d/mongodb-backup"
+local cron_entry=\"$schedule root $script_path >/var/log/harden-mongo-server/backup.log 2>&1\"
+local cron_file=\"/etc/cron.d/harden-mongo-server-backup\"
     
     if ! is_dry_run; then
         echo "$cron_entry" > "$cron_file"
@@ -556,7 +556,7 @@ create_backup_script() {
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Source the backup library
-source \"$(mongodb_hardening_lib_dir)/backup.sh\"
+source \"$(harden_mongo_server_lib_dir)/backup.sh\"
 
 # Configuration
 BACKUP_DIR=\"$DEFAULT_BACKUP_DIR\"
@@ -591,8 +591,8 @@ fi
 
 # Remove backup scheduling
 unschedule_backup() {
-    local cron_file="/etc/cron.d/mongodb-backup"
-    local script_path="/usr/local/bin/mongodb-backup.sh"
+local cron_file="/etc/cron.d/harden-mongo-server-backup"
+    local script_path="/usr/local/bin/harden-mongo-server-backup.sh"
     
     info "Removing automated backup scheduling"
     
@@ -729,7 +729,7 @@ test_backup_restore() {
 # Module information
 backup_module_info() {
     cat << EOF
-MongoDB Hardening Backup Library v$MONGODB_HARDENING_VERSION
+MongoDB Server Hardening Backup Library v$HARDEN_MONGO_SERVER_VERSION
 
 This module provides:
 - Full database backup using mongodump

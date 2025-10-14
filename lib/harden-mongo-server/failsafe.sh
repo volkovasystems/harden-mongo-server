@@ -14,13 +14,13 @@ failsafe_lib_info() {
 }
 
 # Configuration
-readonly FAILSAFE_DIR="/var/lib/mongodb-hardening"
+readonly FAILSAFE_DIR="/var/lib/harden-mongo-server"
 readonly STATE_FILE="${FAILSAFE_DIR}/hardening-state.json"
 readonly LOCKFILE="${FAILSAFE_DIR}/hardening.lock"
 readonly RECOVERY_LOG="${FAILSAFE_DIR}/recovery.log"
-readonly WATCHDOG_SCRIPT="${FAILSAFE_DIR}/mongodb-watchdog.sh"
-readonly HEALTH_CHECK_SCRIPT="${FAILSAFE_DIR}/health-check.sh"
-readonly RECOVERY_SCRIPT="${FAILSAFE_DIR}/auto-recovery.sh"
+readonly WATCHDOG_SCRIPT="${FAILSAFE_DIR}/harden-mongo-server-watchdog.sh"
+readonly HEALTH_CHECK_SCRIPT="${FAILSAFE_DIR}/harden-mongo-server-health-check.sh"
+readonly RECOVERY_SCRIPT="${FAILSAFE_DIR}/harden-mongo-server-auto-recovery.sh"
 
 # Process states
 declare -A PROCESS_STATES=(
@@ -206,7 +206,7 @@ recover_monitoring_processes() {
     local recovered_count=0
     
     # Check for existing monitoring processes
-    if pgrep -f "mongodb-watchdog" >/dev/null; then
+if pgrep -f "harden-mongo-server-watchdog" >/dev/null; then
         monitoring_processes+=("watchdog:running")
     else
         log_warning "MongoDB watchdog not running, starting..."
@@ -330,8 +330,8 @@ create_watchdog_script() {
 #!/bin/bash
 
 # MongoDB Watchdog - Monitors and restarts MongoDB if needed
-LOCKFILE="/var/lib/mongodb-hardening/watchdog.lock"
-LOGFILE="/var/lib/mongodb-hardening/watchdog.log"
+LOCKFILE="/var/lib/harden-mongo-server/watchdog.lock"
+LOGFILE="/var/lib/harden-mongo-server/watchdog.log"
 MAX_RESTARTS=5
 RESTART_COUNT=0
 
@@ -396,8 +396,8 @@ create_health_check_script() {
 #!/bin/bash
 
 # MongoDB Health Check Script
-LOGFILE="/var/lib/mongodb-hardening/health-check.log"
-STATE_FILE="/var/lib/mongodb-hardening/hardening-state.json"
+LOGFILE="/var/lib/harden-mongo-server/health-check.log"
+STATE_FILE="/var/lib/harden-mongo-server/hardening-state.json"
 
 log_message() {
     echo "[$(date)] $*" >> "$LOGFILE"
@@ -471,9 +471,9 @@ create_recovery_script() {
 #!/bin/bash
 
 # Auto-recovery script for MongoDB hardening system
-RECOVERY_LOG="/var/lib/mongodb-hardening/recovery.log"
-WATCHDOG_SCRIPT="/var/lib/mongodb-hardening/mongodb-watchdog.sh"
-HEALTH_CHECK_SCRIPT="/var/lib/mongodb-hardening/health-check.sh"
+RECOVERY_LOG="/var/lib/harden-mongo-server/recovery.log"
+WATCHDOG_SCRIPT="/var/lib/harden-mongo-server/harden-mongo-server-watchdog.sh"
+HEALTH_CHECK_SCRIPT="/var/lib/harden-mongo-server/harden-mongo-server-health-check.sh"
 
 log_recovery() {
     echo "[$(date)] RECOVERY: $*" >> "$RECOVERY_LOG"
@@ -496,7 +496,7 @@ recover_mongodb() {
 
 # Ensure watchdog is running
 ensure_watchdog() {
-    if ! pgrep -f "mongodb-watchdog" >/dev/null; then
+if ! pgrep -f "harden-mongo-server-watchdog" >/dev/null; then
         log_recovery "Starting MongoDB watchdog"
         nohup "$WATCHDOG_SCRIPT" >/dev/null 2>&1 &
     fi
@@ -529,7 +529,7 @@ EOF
 
 # Start watchdog service
 start_watchdog_service() {
-    if pgrep -f "mongodb-watchdog" >/dev/null; then
+if pgrep -f "harden-mongo-server-watchdog" >/dev/null; then
         log_info "MongoDB watchdog is already running"
         return 0
     fi
@@ -538,7 +538,7 @@ start_watchdog_service() {
     nohup "$WATCHDOG_SCRIPT" >/dev/null 2>&1 &
     
     sleep 2
-    if pgrep -f "mongodb-watchdog" >/dev/null; then
+if pgrep -f "harden-mongo-server-watchdog" >/dev/null; then
         log_info "MongoDB watchdog started successfully"
         return 0
     else
@@ -570,20 +570,20 @@ restore_cron_jobs() {
     
     for job in "${missing_jobs[@]}"; do
         case "$job" in
-            "mongodb-backup")
-                echo "0 2 * * * /var/lib/mongodb-hardening/backup-mongodb.sh" >> "$temp_cron"
+"mongodb-backup")
+                echo "0 2 * * * /var/lib/harden-mongo-server/backup-mongodb.sh" >> "$temp_cron"
                 ;;
-            "mongodb-maintenance")
-                echo "0 3 * * 0 /var/lib/mongodb-hardening/maintenance.sh" >> "$temp_cron"
+"mongodb-maintenance")
+                echo "0 3 * * 0 /var/lib/harden-mongo-server/maintenance.sh" >> "$temp_cron"
                 ;;
-            "ssl-certificate-renewal")
-                echo "0 4 1 * * /var/lib/mongodb-hardening/renew-certificates.sh" >> "$temp_cron"
+"ssl-certificate-renewal")
+                echo "0 4 1 * * /var/lib/harden-mongo-server/renew-certificates.sh" >> "$temp_cron"
                 ;;
-            "security-audit")
-                echo "0 5 * * 1 /var/lib/mongodb-hardening/security-audit.sh" >> "$temp_cron"
+"security-audit")
+                echo "0 5 * * 1 /var/lib/harden-mongo-server/security-audit.sh" >> "$temp_cron"
                 ;;
-            "log-rotation")
-                echo "0 1 * * * /var/lib/mongodb-hardening/rotate-logs.sh" >> "$temp_cron"
+"log-rotation")
+                echo "0 1 * * * /var/lib/harden-mongo-server/rotate-logs.sh" >> "$temp_cron"
                 ;;
         esac
     done
@@ -684,11 +684,11 @@ stop_monitoring_services() {
     log_info "Stopping monitoring services..."
     
     # Kill watchdog
-    pkill -f "mongodb-watchdog" || true
+pkill -f "harden-mongo-server-watchdog" || true
     
     # Remove from crontab
     local temp_cron=$(mktemp)
-    crontab -l 2>/dev/null | grep -v -E "(health-check|auto-recovery|mongodb-watchdog)" > "$temp_cron" || true
+crontab -l 2>/dev/null | grep -v -E "(harden-mongo-server-health-check|harden-mongo-server-auto-recovery|harden-mongo-server-watchdog|health-check|auto-recovery|mongodb-watchdog)" > "$temp_cron"
     crontab "$temp_cron" 2>/dev/null || true
     rm "$temp_cron"
     
@@ -759,10 +759,10 @@ create_rollback_script() {
     cat > "$rollback_script" << 'EOF'
 #!/bin/bash
 
-# MongoDB Hardening Rollback Script
-ROLLBACK_LOG="/var/lib/mongodb-hardening/rollback.log"
-STATE_FILE="/var/lib/mongodb-hardening/hardening-state.json"
-BACKUP_DIR="/var/lib/mongodb-hardening/backups"
+# MongoDB Server Hardening Rollback Script
+ROLLBACK_LOG="/var/lib/harden-mongo-server/rollback.log"
+STATE_FILE="/var/lib/harden-mongo-server/hardening-state.json"
+BACKUP_DIR="/var/lib/harden-mongo-server/backups"
 
 log_rollback() {
     echo "[$(date)] ROLLBACK: $*" >> "$ROLLBACK_LOG"
@@ -850,15 +850,15 @@ rollback_monitoring() {
     log_rollback "Rolling back monitoring setup..."
     
     # Kill watchdog processes
-    pkill -f "mongodb-watchdog" 2>/dev/null || true
+pkill -f "harden-mongo-server-watchdog" 2>/dev/null || true
     
     # Remove cron jobs
     crontab -l 2>/dev/null | grep -v -E "(mongodb|health-check|auto-recovery)" | crontab - 2>/dev/null || true
     
     # Remove monitoring scripts
-    rm -f /var/lib/mongodb-hardening/mongodb-watchdog.sh
-    rm -f /var/lib/mongodb-hardening/health-check.sh
-    rm -f /var/lib/mongodb-hardening/auto-recovery.sh
+rm -f /var/lib/harden-mongo-server/harden-mongo-server-watchdog.sh
+    rm -f /var/lib/harden-mongo-server/harden-mongo-server-health-check.sh
+    rm -f /var/lib/harden-mongo-server/harden-mongo-server-auto-recovery.sh
     
     log_rollback "Monitoring services removed"
 }
