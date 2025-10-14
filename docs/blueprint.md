@@ -55,6 +55,11 @@ MongoDB hardening (enabled by default)
 - Transport and auth: requireTLS, x509-only; tlsMinVersion=TLS1_2; SCRAM disabled. Authentication restrictions pin principals to 127.0.0.1 and/or VPN CIDR; the App principal is also pinned to its allowed IPs.
 - Connection safety: set mongod maxIncomingConnections=1024 by default; apply per-source concurrent cap=200 and new-connection rate ≤20/sec (burst 40) at the firewall.
 - Least-privilege roles: Root (root), Admin (hmsOpsAdmin → clusterMonitor only), Backup (backup), App (hmsAppRW → minimal DML; no DDL/index operations). Destructive/index operations require an Admin over VPN.
+- Data safety (existing deployments): if any user databases already exist, all changes are non-destructive.
+  - An encrypted initial backup is taken before any changes.
+  - The existing dbPath is never deleted or overwritten.
+  - If migration to WiredTiger is required, it proceeds via a non-destructive path (e.g., logical dump/restore to a new WiredTiger data directory or a vendor-supported in-place upgrade path). The original data is preserved until verification completes.
+  - Post-change verification is required before the migration is finalized; on failure, automatic rollback restores last-known-good.
 - Preflight gating: if minimum requirements (WiredTiger and TLS 1.2+) are not supported by the installed version, the tool stops and instructs you to upgrade; it does not fall back.
 
 Networking and exposure
@@ -317,7 +322,8 @@ Acceptance checklist
 - TLS required; x509-only; private CA; monthly renewal without downtime.
 - MongoDB uses WiredTiger; FCV pinned; maxIncomingConnections capped; per-source connection limits on 27017; App role has minimal DML (no DDL/index) and is IP-pinned; Admin ops occur over VPN.
 - Admin cannot read or change app data; App has read/write only to business DBs (new DBs auto-secured);
-  Backup can dump only; Root has full control (use sparingly).
+Backup can dump only; Root has full control (use sparingly).
+- Existing databases are protected: the tool takes an initial encrypted backup and performs only non-destructive changes; WiredTiger migrations preserve original data until verification completes.
 - VPN installed and enabled; MongoDB and SSH accessible only over VPN by default; on EC2, OS firewall enforces VPN-only. The tool does not use cloud credentials or modify Security Groups; it may print guidance you can apply manually.
 - First run generates 8 certificates: 1 MongoDB server cert, 1 VPN server cert, 4 DB client certs for roles (Root/Admin/App/Backup), and 2 VPN client certs for human access (admin/viewer). DB certs do not work for VPN, and VPN certs do not work for DB.
 - Auto-lock to VPN-only occurs after the first successful SSH over VPN; the watcher disables itself; rollback works if failure occurs.
