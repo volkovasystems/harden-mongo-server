@@ -169,7 +169,7 @@ Onboarding (operator convenience)
 - --onboarding-expiry MINUTES                Override link TTL (default 10)
 
 Backups (local-only, safe by default)
-- Schedule: daily, weekly (Sunday), monthly (1st) at the learned quiet hour (fallback 02:00).
+- Schedule: daily, weekly (Sunday), monthly (1st) at 02:00 local by default; adjusts to the quietest hour as data is gathered.
 - Encryption: age; root-only key in /etc/harden-mongo-server/keys/backup.agekey.
 - Compression: zstd.
 - Disk safety: retention and quotas to avoid filling the disk; if space would be exceeded, trim in a safe order or skip with an alert.
@@ -329,7 +329,7 @@ Planned file changes (structure-preserving)
 - System (./lib/harden-mongo-server/system.sh)
   - Ensure directories/permissions; zero-downtime reload path; prompt before unavoidable restarts; restore last-known-good on failure.
   - Create OS groups (admins/viewers), configure chroot SFTP for viewers, and manage sshd drop-ins.
-  - Apply minimal sysctls and enable unattended security updates; configure log rotation for mongod/audit/tool logs.
+  - Apply minimal sysctls and enable unattended security updates; configure log rotation for mongod and tool logs.
 - Logging (./lib/harden-mongo-server/logging.sh)
   - Clear audit tags for grants, config diffs, and backup actions.
 - Failsafe (./lib/harden-mongo-server/failsafe.sh)
