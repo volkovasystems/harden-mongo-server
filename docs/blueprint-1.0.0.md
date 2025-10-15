@@ -40,6 +40,7 @@ Features deferred to future versions are advanced management and analytics only.
 - Phases: preflight → bootstrap → tls → mongodb-config → provision → firewall → backups → verify.
 - Idempotent: reruns safely reconcile the system to the desired secure state.
 - Continuous enforcement: on every run, the tool verifies and re-enforces all security features (VPN hardening, firewall policy, TLS/auth settings, roles and auth restrictions, sysctls, backups). If a required condition cannot be met, it stops or rolls back with a clear message.
+- First-run initial backup (if existing DB): on the first run, if an existing MongoDB instance is detected, the tool performs an encrypted local backup before any changes. If a safe backup cannot be taken, execution stops with a clear message (fails closed).
 - Automation: auto-grants DB access when App touches new databases, auto-rotates certificates monthly, auto-locks to VPN after first SSH over VPN.
 
 ## Security model
