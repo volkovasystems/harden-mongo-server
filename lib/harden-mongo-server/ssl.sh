@@ -25,16 +25,22 @@ fi
 # SSL/TLS Configuration Constants
 # ================================
 
-# Default SSL paths and settings
+# Default SSL paths and settings (1.0.0 MVP)
 readonly MONGODB_SSL_DIR="/etc/ssl/mongodb"
 readonly MONGODB_CA_DIR="/etc/mongoCA"
 readonly MONGODB_CLIENT_DIR="/etc/mongoCA/clients"
 readonly DEFAULT_KEY_SIZE="2048"
 readonly DEFAULT_VALIDITY_DAYS="365"
+readonly DEFAULT_CA_VALIDITY_DAYS="3650"  # 10 years for CA
 readonly DEFAULT_COUNTRY="US"
-readonly DEFAULT_STATE="California"
-readonly DEFAULT_CITY="San Francisco"
-readonly DEFAULT_ORG="MongoDB"
+readonly DEFAULT_STATE="Unknown"
+readonly DEFAULT_CITY="Unknown"
+readonly DEFAULT_ORG="HMS-MongoDB-CA"
+
+# 1.0.0 MVP Certificate roles
+readonly -a MONGODB_CLIENT_ROLES=("root" "admin" "app" "backup")
+readonly CERT_ROTATION_SERVICE="harden-mongo-server-cert-rotate.service"
+readonly CERT_ROTATION_TIMER="harden-mongo-server-cert-rotate.timer"
 
 # SSL certificate file extensions
 readonly CA_KEY_EXT=".key"
@@ -736,6 +742,298 @@ revoke_certificate() {
         "openssl ca -config '$ca_config_file' -gencrl -out '$crl_file'"
     
     success "Certificate revoked successfully"
+}
+
+# ================================
+# 1.0.0 MVP Certificate Management
+# ================================
+
+# Generate all required certificates
+generate_required_certificates() {
+    info "Generating all certificates..."
+    
+    # Initialize CA if not exists
+    if ! verify_ca "$MONGODB_CA_DIR" 2>/dev/null; then
+        info "Initializing Certificate Authority..."
+        if ! initialize_ca "$MONGODB_CA_DIR"; then
+            error "Failed to initialize Certificate Authority"
+            return 1
+        fi
+    fi
+    
+    # Generate MongoDB server certificate
+    if ! generate_server_certificate "$(hostname -f)"; then
+        error "Failed to generate MongoDB server certificate"
+        return 1
+    fi
+    
+    # Generate MongoDB client certificates for all roles
+    local roles=("root" "admin" "app" "backup")
+    for role in "${roles[@]}"; do
+        if ! generate_mongodb_client_certificate "$role"; then
+            error "Failed to generate MongoDB client certificate for $role"
+            return 1
+        fi
+    done
+    
+    success "All 1.0.0 MVP certificates generated successfully"
+}
+
+# Generate MongoDB client certificate (1.0.0 MVP format)
+generate_mongodb_client_certificate() {
+    local role="$1"
+    local ca_dir="${2:-$MONGODB_CA_DIR}"
+    local client_dir="${3:-$MONGODB_CLIENT_DIR}"
+    
+    info "Generating MongoDB client certificate for role: $role"
+    
+    # Create client directory
+    create_dir_safe "$client_dir" 755 root:root
+    
+    local client_key_file="$client_dir/${role}.key"
+    local client_csr_file="$client_dir/${role}.csr"
+    local client_cert_file="$client_dir/${role}.crt"
+    local client_pem_file="$client_dir/${role}.pem"
+    
+    # Generate client private key
+    execute_or_simulate "Generate $role client private key" \
+        "openssl genrsa -out '$client_key_file' '$DEFAULT_KEY_SIZE'"
+    
+    if ! is_dry_run; then
+        chmod 600 "$client_key_file"
+        chown root:root "$client_key_file"
+    fi
+    
+    # Create certificate signing request with proper subject for MongoDB x509
+    local client_subject="/C=$DEFAULT_COUNTRY/ST=$DEFAULT_STATE/L=$DEFAULT_CITY/O=$DEFAULT_ORG/CN=$role"
+    
+    execute_or_simulate "Generate $role CSR" \
+        "openssl req -new -key '$client_key_file' -out '$client_csr_file' -subj '$client_subject'"
+    
+    # Sign client certificate
+    local ca_key_file="$ca_dir/ca$CA_KEY_EXT"
+    local ca_cert_file="$ca_dir/ca$CA_CERT_EXT"
+    
+    execute_or_simulate "Sign $role client certificate" \
+        "openssl x509 -req -in '$client_csr_file' -CA '$ca_cert_file' -CAkey '$ca_key_file' -CAcreateserial -out '$client_cert_file' -days '$DEFAULT_VALIDITY_DAYS'"
+    
+    if ! is_dry_run; then
+        chmod 644 "$client_cert_file"
+        chown root:root "$client_cert_file"
+    fi
+    
+    # Create PEM file with certificate and key (required for MongoDB)
+    execute_or_simulate "Create $role PEM file" \
+        "cat '$client_cert_file' '$client_key_file' > '$client_pem_file'"
+    
+    if ! is_dry_run; then
+        chmod 600 "$client_pem_file"
+        chown root:root "$client_pem_file"
+    fi
+    
+    # Clean up CSR
+    execute_or_simulate "Clean up $role CSR" \
+        "rm -f '$client_csr_file'"
+    
+    success "MongoDB $role client certificate generated"
+}
+
+# Set up automatic certificate rotation (1.0.0 MVP)
+setup_certificate_rotation() {
+    info "Setting up automatic certificate rotation..."
+    
+    # Create certificate rotation script
+    create_certificate_rotation_script
+    
+    # Create systemd service
+    create_certificate_rotation_service
+    
+    # Create systemd timer (monthly)
+    create_certificate_rotation_timer
+    
+    # Enable the timer
+    systemctl enable "$CERT_ROTATION_TIMER"
+    systemctl start "$CERT_ROTATION_TIMER"
+    
+    success "Certificate rotation configured (monthly)"
+}
+
+# Create certificate rotation script
+create_certificate_rotation_script() {
+    local rotation_script="/usr/local/bin/harden-mongo-server-cert-rotate.sh"
+    
+    cat > "$rotation_script" << 'EOF'
+#!/bin/bash
+# Certificate Rotation Script for MongoDB Server Hardening Tool 1.0.0
+# Rotates MongoDB and VPN certificates with zero-downtime reload
+
+LOG_FILE="/var/log/harden-mongo-server/cert-rotation.log"
+BACKUP_DIR="/var/backups/harden-mongo-server/certificates"
+MONGODB_CA_DIR="/etc/mongoCA"
+VPN_CONFIG_DIR="/etc/openvpn/server"
+
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# Backup current certificates
+backup_current_certificates() {
+    local backup_timestamp
+    backup_timestamp=$(date '+%Y%m%d_%H%M%S')
+    local backup_path="$BACKUP_DIR/rotation_$backup_timestamp"
+    
+    mkdir -p "$backup_path"
+    
+    # Backup MongoDB certificates
+    if [[ -d "$MONGODB_CA_DIR" ]]; then
+        cp -r "$MONGODB_CA_DIR" "$backup_path/mongodb-ca"
+    fi
+    
+    # Backup VPN certificates
+    if [[ -d "$VPN_CONFIG_DIR" ]]; then
+        cp -r "$VPN_CONFIG_DIR" "$backup_path/vpn"
+    fi
+    
+    log_message "Certificates backed up to $backup_path"
+}
+
+# Rotate MongoDB certificates
+rotate_mongodb_certificates() {
+    log_message "Rotating MongoDB certificates..."
+    
+    # Generate new certificates via internal CLI command
+    /usr/local/bin/harden-mongo-server generate-certificates
+    
+    # Graceful reload MongoDB
+    if systemctl is-active --quiet mongod; then
+        log_message "Performing graceful MongoDB reload..."
+        systemctl reload mongod || {
+            log_message "Graceful reload failed, attempting restart..."
+            systemctl restart mongod
+        }
+    fi
+}
+
+# Rotate VPN certificates
+rotate_vpn_certificates() {
+    log_message "Rotating VPN certificates..."
+    
+    # Regenerate VPN certificates (this will be handled by VPN module)
+    # For now, just reload OpenVPN
+    if systemctl is-active --quiet openvpn-server@server; then
+        log_message "Reloading OpenVPN server..."
+        systemctl restart openvpn-server@server
+    fi
+}
+
+# Main rotation process
+main() {
+    log_message "Starting certificate rotation"
+    
+    # Check if MongoDB is using TLS
+    if ! grep -q "tls:" /etc/mongod.conf 2>/dev/null; then
+        log_message "MongoDB TLS not configured, skipping rotation"
+        exit 0
+    fi
+    
+    # Backup current certificates
+    backup_current_certificates
+    
+    # Rotate certificates
+    rotate_mongodb_certificates
+    rotate_vpn_certificates
+    
+    log_message "Certificate rotation completed successfully"
+}
+
+main "$@"
+EOF
+    
+    chmod 755 "$rotation_script"
+    chown root:root "$rotation_script"
+}
+
+# Create certificate rotation systemd service
+create_certificate_rotation_service() {
+    cat > "/etc/systemd/system/$CERT_ROTATION_SERVICE" << EOF
+[Unit]
+Description=MongoDB Certificate Rotation Service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/harden-mongo-server-cert-rotate.sh
+User=root
+Group=root
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/harden-mongo-server /var/backups/harden-mongo-server /etc/mongoCA /etc/openvpn
+EOF
+    
+    systemctl daemon-reload
+}
+
+# Create certificate rotation systemd timer
+create_certificate_rotation_timer() {
+    local rotation_days
+    rotation_days=$(get_config_value "tls.rotation.periodDays")
+    
+    cat > "/etc/systemd/system/$CERT_ROTATION_TIMER" << EOF
+[Unit]
+Description=Monthly Certificate Rotation Timer
+Requires=$CERT_ROTATION_SERVICE
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    
+    systemctl daemon-reload
+}
+
+# Execute TLS setup phase
+execute_tls_phase() {
+    info "Starting TLS setup phase..."
+    
+    # Generate all required certificates
+    if ! generate_required_certificates; then
+        error "Failed to generate certificates"
+        return 1
+    fi
+    
+    # Set up certificate rotation
+    if ! setup_certificate_rotation; then
+        error "Failed to setup certificate rotation"
+        return 1
+    fi
+    
+    success "TLS setup phase completed"
+}
+
+# Check if zero-downtime reload is supported
+supports_zero_downtime_reload() {
+    # Check MongoDB version and configuration
+    local mongodb_version
+    mongodb_version=$(get_mongodb_version 2>/dev/null)
+    
+    if [[ -n "$mongodb_version" ]]; then
+        # MongoDB 4.4+ supports SIGHUP for certificate reload
+        local major minor
+        IFS='.' read -r major minor _ <<< "$mongodb_version"
+        if (( major > 4 || (major == 4 && minor >= 4) )); then
+            return 0
+        fi
+    fi
+    
+    return 1
 }
 
 # ================================

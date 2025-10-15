@@ -26,10 +26,13 @@ readonly DEFAULT_CLIENT_DIR="/etc/mongoCA/clients"
 
 # Configuration file paths
 readonly HARDEN_MONGO_SERVER_CONF_DIR="/etc/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_CONFIG_FILE="$HARDEN_MONGO_SERVER_CONF_DIR/config.json"
+readonly HARDEN_MONGO_SERVER_KEYS_DIR="$HARDEN_MONGO_SERVER_CONF_DIR/keys"
 readonly HARDEN_MONGO_SERVER_LIB_DIR="/usr/lib/harden-mongo-server"
 readonly HARDEN_MONGO_SERVER_SHARE_DIR="/usr/share/harden-mongo-server"
 readonly HARDEN_MONGO_SERVER_VAR_DIR="/var/lib/harden-mongo-server"
 readonly HARDEN_MONGO_SERVER_LOG_DIR="/var/log/harden-mongo-server"
+readonly HARDEN_MONGO_SERVER_BACKUP_DIR="/var/backups/harden-mongo-server"
 
 # Runtime directories
 readonly HARDEN_MONGO_SERVER_RUN_DIR="/var/run/harden-mongo-server"
@@ -69,6 +72,260 @@ readonly ICON_FIXED="🔧"
 readonly ICON_QUERY="?"
 readonly ICON_SECURITY="🔒"
 readonly ICON_EXPLAIN="📋"
+
+# ================================
+# Configuration Management (1.0.0 Schema)
+# ================================
+
+# Default 1.0.0 MVP configuration
+get_default_config() {
+    cat << 'EOF'
+{
+  "onboarding": {
+    "method": "cloudflared",
+    "expiryMinutes": 10,
+    "singleUse": true,
+    "filenameDateFormat": "YYYY-MM-DD"
+  },
+  "tls": {
+    "mode": "internalCA",
+    "rotation": {
+      "periodDays": 30,
+      "zeroDowntimeReload": true
+    }
+  },
+  "network": {
+    "bind": ["127.0.0.1", "<VPN-interface>"],
+    "allowedIPs": []
+  },
+  "mongodb": {
+    "tlsMinVersion": "TLS1_2",
+    "maxIncomingConnections": 1024
+  },
+  "principals": {
+    "root": {
+      "allowedClientSources": ["127.0.0.1", "10.8.0.0/24"]
+    },
+    "admin": {
+      "allowedClientSources": ["10.8.0.0/24"]
+    },
+    "app": {
+      "allowedClientSources": ["127.0.0.1", "10.8.0.0/24"]
+    },
+    "backup": {
+      "allowedClientSources": ["127.0.0.1"]
+    }
+  },
+  "appAccess": {
+    "autoApproveNewDatabases": true,
+    "excludeDatabases": ["admin", "local", "config"]
+  },
+  "firewall": {
+    "stealth": {
+      "dropUnmatchedPublic": true,
+      "blockIcmpEchoPublic": true,
+      "allowIcmpVpn": true
+    }
+  },
+  "backups": {
+    "enabled": true,
+    "targetDir": "/var/backups/harden-mongo-server",
+    "retention": {
+      "daily": 7
+    },
+    "compression": "zstd",
+    "encryption": {
+      "type": "age",
+      "keyPath": "/etc/harden-mongo-server/keys/backup.agekey"
+    },
+    "schedule": "02:00"
+  },
+  "openvpn": {
+    "enabled": true,
+    "network": "10.8.0.0/24",
+    "port": 1194,
+    "proto": "udp",
+    "crypto": {
+      "tlsCrypt": true,
+      "cipher": "AES-256-GCM",
+      "auth": "SHA256",
+      "tlsVersionMin": "TLS1_2"
+    }
+  },
+  "ssh": {
+    "vpnOnly": true
+  },
+  "autoLockToVpnOnFirstRun": true,
+  "humans": [
+    {
+      "name": "admin",
+      "role": "admin",
+      "sshAuthorizedKeys": [],
+      "vpnEnabled": true
+    },
+    {
+      "name": "viewer",
+      "role": "viewer",
+      "sshAuthorizedKeys": [],
+      "vpnEnabled": true
+    }
+  ]
+}
+EOF
+}
+
+# Load configuration from file or use defaults
+load_config() {
+    local config_file="${HARDEN_MONGO_SERVER_CONFIG_FILE:-$HARDEN_MONGO_SERVER_CONF_DIR/config.json}"
+    
+    if [[ -f "$config_file" ]]; then
+        cat "$config_file"
+    else
+        get_default_config
+    fi
+}
+
+# Get configuration value using jq-like syntax
+# Usage: get_config_value "path.to.value"
+get_config_value() {
+    local path="$1"
+    local config
+    config=$(load_config)
+    
+    # Use jq if available, otherwise use basic parsing
+    if command_exists jq; then
+        echo "$config" | jq -r ".${path} // empty"
+    else
+        # Basic fallback for critical values
+        case "$path" in
+            "backups.targetDir")
+                echo "/var/backups/harden-mongo-server"
+                ;;
+            "openvpn.network")
+                echo "10.8.0.0/24"
+                ;;
+            "mongodb.tlsMinVersion")
+                echo "TLS1_2"
+                ;;
+            *)
+                # Return empty for unknown paths
+                ;;
+        esac
+    fi
+}
+
+# Save configuration to file
+save_config() {
+    local config="$1"
+    local config_file="${HARDEN_MONGO_SERVER_CONFIG_FILE:-$HARDEN_MONGO_SERVER_CONF_DIR/config.json}"
+    local backup_file="${config_file}.backup.$(date +%s)"
+    
+    # Create config directory if it doesn't exist
+    create_dir_safe "$(dirname "$config_file")" 755 root:root
+    
+    # Backup existing config
+    if [[ -f "$config_file" ]]; then
+        cp "$config_file" "$backup_file"
+    fi
+    
+    # Save new config
+    echo "$config" > "$config_file"
+    chmod 600 "$config_file"
+    chown root:root "$config_file"
+    
+    # Validate the saved config
+    if command_exists jq && ! jq -e . "$config_file" >/dev/null 2>&1; then
+        error "Invalid JSON configuration saved, restoring backup"
+        if [[ -f "$backup_file" ]]; then
+            mv "$backup_file" "$config_file"
+        fi
+        return 1
+    fi
+}
+
+# Update a specific configuration value
+# Usage: update_config_value "path.to.value" "new_value"
+update_config_value() {
+    local path="$1"
+    local value="$2"
+    local config
+    
+    config=$(load_config)
+    
+    if command_exists jq; then
+        # Use jq to update the value
+        config=$(echo "$config" | jq ".${path} = \"$value\"")
+        save_config "$config"
+    else
+        error "jq is required for configuration updates"
+        return 1
+    fi
+}
+
+# Add IP to allowed list
+add_allowed_ip() {
+    local ip="$1"
+    local config
+    
+    config=$(load_config)
+    
+    if command_exists jq; then
+        # Check if IP already exists
+        if echo "$config" | jq -e ".network.allowedIPs | contains([\"$ip\"])" >/dev/null 2>&1; then
+            info "IP $ip is already in allowed list"
+            return 0
+        fi
+        
+        # Add IP to array
+        config=$(echo "$config" | jq ".network.allowedIPs += [\"$ip\"]")
+        save_config "$config"
+        
+        # Update app principal sources
+        local app_sources
+        app_sources=$(echo "$config" | jq -r '.principals.app.allowedClientSources + .network.allowedIPs | unique | @json')
+        config=$(echo "$config" | jq ".principals.app.allowedClientSources = $app_sources")
+        save_config "$config"
+    else
+        error "jq is required for IP management"
+        return 1
+    fi
+}
+
+# Remove IP from allowed list
+remove_allowed_ip() {
+    local ip="$1"
+    local config
+    
+    config=$(load_config)
+    
+    if command_exists jq; then
+        # Remove IP from array
+        config=$(echo "$config" | jq ".network.allowedIPs = (.network.allowedIPs - [\"$ip\"])")
+        save_config "$config"
+        
+        # Update app principal sources (keep base sources, remove this IP)
+        local base_sources='["127.0.0.1", "10.8.0.0/24"]'
+        local allowed_ips
+        allowed_ips=$(echo "$config" | jq -r '.network.allowedIPs | @json')
+        local app_sources
+        app_sources=$(echo "$base_sources $allowed_ips" | jq -s 'add | unique | @json')
+        config=$(echo "$config" | jq ".principals.app.allowedClientSources = $app_sources")
+        save_config "$config"
+    else
+        error "jq is required for IP management"
+        return 1
+    fi
+}
+
+# Initialize configuration file if it doesn't exist
+init_config() {
+    local config_file="${HARDEN_MONGO_SERVER_CONFIG_FILE:-$HARDEN_MONGO_SERVER_CONF_DIR/config.json}"
+    
+    if [[ ! -f "$config_file" ]]; then
+        info "Creating default configuration at $config_file"
+        get_default_config | save_config
+    fi
+}
 
 # ================================
 # Utility Functions
@@ -251,11 +508,17 @@ trap 'cleanup_harden_mongo_server; exit 130' INT TERM
 # Initialize the core module
 init_harden_mongo_server_core() {
     # Create required directories
-create_dir_safe "$HARDEN_MONGO_SERVER_TEMP_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_TEMP_DIR" 755 root:root
     create_dir_safe "$HARDEN_MONGO_SERVER_RUN_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_CONF_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_KEYS_DIR" 700 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_BACKUP_DIR" 750 root:root
     
     # Set up signal handlers
     setup_signal_handlers
+    
+    # Initialize configuration
+    init_config
     
     # Set up logging if module is available
     if command_exists load_module && load_module logging 2>/dev/null; then
@@ -294,8 +557,8 @@ validate_core_requirements() {
         ((errors++))
     fi
     
-    # Check required commands
-    local required_commands=(openssl awk grep sed)
+    # Check required commands for 1.0.0 MVP
+    local required_commands=(openssl awk grep sed jq systemctl)
     for cmd in "${required_commands[@]}"; do
         if ! command_exists "$cmd"; then
             echo "Error: Required command '$cmd' not found" >&2

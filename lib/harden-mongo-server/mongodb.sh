@@ -33,65 +33,6 @@ readonly MONGODB_GROUP="mongodb"
 readonly MONGODB_DEFAULT_PORT="27017"
 readonly MONGODB_DEFAULT_BIND_IP="127.0.0.1"
 
-# MongoDB configuration templates
-readonly MONGODB_SECURE_CONFIG_TEMPLATE='# MongoDB Configuration File - Security Hardened
-# MongoDB storage options
-storage:
-  dbPath: %DB_PATH%
-  journal:
-    enabled: true
-  wiredTiger:
-    engineConfig:
-      cacheSizeGB: %CACHE_SIZE%
-    collectionConfig:
-      blockCompressor: snappy
-    indexConfig:
-      prefixCompression: true
-
-# Network interfaces
-net:
-  port: %PORT%
-  bindIp: %BIND_IP%
-  maxIncomingConnections: %MAX_CONNECTIONS%
-  ssl:
-    mode: %SSL_MODE%
-    PEMKeyFile: %SSL_PEM_FILE%
-    CAFile: %SSL_CA_FILE%
-
-# Process management
-processManagement:
-  fork: true
-  pidFilePath: /var/run/mongodb/mongod.pid
-  timeZoneInfo: /usr/share/zoneinfo
-
-# Logging
-systemLog:
-  destination: file
-  logAppend: true
-  logRotate: reopen
-  path: %LOG_PATH%
-  verbosity: 0
-  component:
-    accessControl:
-      verbosity: 1
-
-# Security
-security:
-  authorization: %AUTH_ENABLED%
-  keyFile: %KEY_FILE%
-  javascriptEnabled: false
-  clusterAuthMode: %CLUSTER_AUTH_MODE%
-
-# Operation profiling
-operationProfiling:
-  mode: slowOp
-  slowOpThresholdMs: 100
-
-# Storage engine options
-setParameter:
-  authenticationMechanisms: "SCRAM-SHA-1,SCRAM-SHA-256"
-  failIndexKeyTooLong: false
-  maxLogSizeKB: 10240'
 
 # ================================
 # MongoDB Service Management
@@ -265,103 +206,33 @@ backup_mongodb_config() {
     fi
 }
 
-# Generate secure MongoDB configuration
-generate_mongodb_config() {
-    local db_path="${1:-$DEFAULT_DB_PATH}"
-    local log_path="${2:-$DEFAULT_LOG_PATH}"
-    local port="${3:-$MONGODB_DEFAULT_PORT}"
-    local bind_ip="${4:-$MONGODB_DEFAULT_BIND_IP}"
-    local ssl_enabled="${5:-false}"
-    local auth_enabled="${6:-enabled}"
-    local ssl_pem_file="${7:-}"
-    local ssl_ca_file="${8:-}"
-    local key_file="${9:-}"
-    
-    # Calculate cache size (50% of available memory, max 1GB for small systems)
-    local mem_info
-    mem_info=$(get_memory_info)
-    local mem_total
-    mem_total=$(echo "$mem_info" | grep -o "total:[0-9]*" | cut -d: -f2)
-    local cache_size=$((mem_total / 2048))  # Convert MB to GB and take half
-    if ((cache_size < 1)); then
-        cache_size=1
-    elif ((cache_size > 64)); then
-        cache_size=64  # Cap at 64GB for very large systems
-    fi
-    
-    # Calculate max connections based on memory
-    local max_connections=1000
-    if ((mem_total < 2048)); then
-        max_connections=200
-    elif ((mem_total < 4096)); then
-        max_connections=500
-    fi
-    
-    # Set SSL mode
-    local ssl_mode="disabled"
-    if [[ "$ssl_enabled" == "true" ]]; then
-        ssl_mode="requireSSL"
-    fi
-    
-    # Set cluster auth mode
-    local cluster_auth_mode="keyFile"
-    if [[ "$ssl_enabled" == "true" ]]; then
-        cluster_auth_mode="x509"
-    fi
-    
-    # Generate configuration content
-    local config_content="$MONGODB_SECURE_CONFIG_TEMPLATE"
-    config_content="${config_content//%DB_PATH%/$db_path}"
-    config_content="${config_content//%LOG_PATH%/$log_path}"
-    config_content="${config_content//%PORT%/$port}"
-    config_content="${config_content//%BIND_IP%/$bind_ip}"
-    config_content="${config_content//%CACHE_SIZE%/$cache_size}"
-    config_content="${config_content//%MAX_CONNECTIONS%/$max_connections}"
-    config_content="${config_content//%SSL_MODE%/$ssl_mode}"
-    config_content="${config_content//%SSL_PEM_FILE%/$ssl_pem_file}"
-    config_content="${config_content//%SSL_CA_FILE%/$ssl_ca_file}"
-    config_content="${config_content//%AUTH_ENABLED%/$auth_enabled}"
-    config_content="${config_content//%KEY_FILE%/$key_file}"
-    config_content="${config_content//%CLUSTER_AUTH_MODE%/$cluster_auth_mode}"
-    
-    echo "$config_content"
-}
 
-# Apply MongoDB configuration
-apply_mongodb_config() {
-    local db_path="${1:-$DEFAULT_DB_PATH}"
-    local log_path="${2:-$DEFAULT_LOG_PATH}"
-    local port="${3:-$MONGODB_DEFAULT_PORT}"
-    local bind_ip="${4:-$MONGODB_DEFAULT_BIND_IP}"
-    local ssl_enabled="${5:-false}"
-    local auth_enabled="${6:-enabled}"
-    local ssl_pem_file="${7:-}"
-    local ssl_ca_file="${8:-}"
-    local key_file="${9:-}"
-    
+
+# Apply given MongoDB configuration content
+apply_mongodb_config_content() {
+    local content="$1"
+    local db_path="${2:-$DEFAULT_DB_PATH}"
+    local log_path="${3:-$DEFAULT_LOG_PATH}"
+
     info "Applying MongoDB configuration..."
-    
+
     # Backup existing configuration
     backup_mongodb_config
-    
-    # Generate new configuration
-    local new_config
-    new_config=$(generate_mongodb_config "$db_path" "$log_path" "$port" "$bind_ip" "$ssl_enabled" "$auth_enabled" "$ssl_pem_file" "$ssl_ca_file" "$key_file")
-    
-    # Write configuration file
+
+    # Write provided configuration content
     if ! is_dry_run; then
-        echo "$new_config" > "$MONGODB_CONFIG_FILE"
+        echo "$content" > "$MONGODB_CONFIG_FILE"
         chmod 644 "$MONGODB_CONFIG_FILE"
         chown root:root "$MONGODB_CONFIG_FILE"
     fi
-    
+
     success "MongoDB configuration applied to $MONGODB_CONFIG_FILE"
-    
-    # Create required directories
+
+    # Ensure required paths exist
     create_dir_safe "$(dirname "$db_path")" 755 "$MONGODB_USER:$MONGODB_GROUP"
     create_dir_safe "$db_path" 755 "$MONGODB_USER:$MONGODB_GROUP"
     create_dir_safe "$(dirname "$log_path")" 755 "$MONGODB_USER:$MONGODB_GROUP"
-    
+
     # Create log file with proper permissions
     if [[ ! -f "$log_path" ]]; then
         execute_or_simulate "Create MongoDB log file" "touch '$log_path'"
@@ -370,50 +241,6 @@ apply_mongodb_config() {
     fi
 }
 
-# Validate MongoDB configuration
-validate_mongodb_config() {
-    local config_file="${1:-$MONGODB_CONFIG_FILE}"
-    
-    if [[ ! -f "$config_file" ]]; then
-        error "MongoDB configuration file not found: $config_file"
-        return 1
-    fi
-    
-    info "Validating MongoDB configuration..."
-    
-    # Test configuration syntax
-    if command_exists mongod; then
-        if mongod --config "$config_file" --configtest 2>/dev/null; then
-            success "MongoDB configuration syntax is valid"
-        else
-            error "MongoDB configuration contains syntax errors"
-            return 1
-        fi
-    else
-        warn "mongod command not found, skipping syntax validation"
-    fi
-    
-    # Check required sections
-    local required_sections=("storage" "net" "systemLog" "security")
-    for section in "${required_sections[@]}"; do
-        if grep -q "^${section}:" "$config_file"; then
-            verbose "Configuration section found: $section"
-        else
-            warn "Missing configuration section: $section"
-        fi
-    done
-    
-    # Check file permissions
-    local config_perms
-    config_perms=$(stat -c %a "$config_file" 2>/dev/null)
-    if [[ "$config_perms" -le "644" ]]; then
-        verbose "Configuration file permissions are secure: $config_perms"
-    else
-        warn "Configuration file permissions may be too permissive: $config_perms"
-    fi
-    
-    success "MongoDB configuration validation completed"
-}
 
 # ================================
 # MongoDB Database Operations
@@ -442,6 +269,14 @@ mongodb_execute() {
         connect_options="--username '$username' --password '$password' --authenticationDatabase '$auth_database'"
     fi
     
+    # TLS/x509 auth if admin certs exist
+    local admin_cert="/etc/mongoCA/clients/admin.pem"
+    local ca_cert="/etc/mongoCA/ca.crt"
+    local tls_options=""
+    if [[ -f "$admin_cert" && -f "$ca_cert" ]]; then
+        tls_options="--tls --tlsCertificateKeyFile '$admin_cert' --tlsCAFile '$ca_cert' --authenticationDatabase '\$external' --authenticationMechanism 'MONGODB-X509'"
+    fi
+    
     # Get connection details from config
     local port
     local bind_ip
@@ -455,198 +290,545 @@ mongodb_execute() {
     
     verbose "Executing MongoDB command on $bind_ip:$port/$database"
     
-    echo "$command" | eval "$mongo_cmd --host '$bind_ip' --port '$port' $connect_options '$database'"
+    echo "$command" | eval "$mongo_cmd --host '$bind_ip' --port '$port' $tls_options $connect_options '$database'"
 }
 
-# Check MongoDB connection
-check_mongodb_connection() {
-    local username="${1:-}"
-    local password="${2:-}"
+
+# ================================
+# 1.0.0 MVP MongoDB Configuration
+# ================================
+
+# 1.0.0 MVP Constants
+readonly MONGODB_HARDENED_CONFIG_TEMPLATE='# MongoDB Configuration File - Security Hardened (MVP)
+# Storage engine (WiredTiger enforced)
+storage:
+  dbPath: %DB_PATH%
+  engine: wiredTiger
+  journal:
+    enabled: true
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: %CACHE_SIZE%
+    collectionConfig:
+      blockCompressor: snappy
+    indexConfig:
+      prefixCompression: true
+
+# Network interfaces (VPN + localhost by default)
+net:
+  port: %PORT%
+  bindIp: %BIND_IP%
+  maxIncomingConnections: %MAX_CONNECTIONS%
+  tls:
+    mode: requireTLS
+    certificateKeyFile: %TLS_CERT_KEY_FILE%
+    CAFile: %TLS_CA_FILE%
+    allowConnectionsWithoutCertificates: false
+    allowInvalidCertificates: false
+    allowInvalidHostnames: false
+    disabledProtocols: TLS1_0,TLS1_1
+
+# Process management
+processManagement:
+  fork: true
+  pidFilePath: /var/run/mongodb/mongod.pid
+  timeZoneInfo: /usr/share/zoneinfo
+
+# Logging
+systemLog:
+  destination: file
+  logAppend: true
+  logRotate: reopen
+  path: %LOG_PATH%
+  verbosity: 0
+  component:
+    accessControl:
+      verbosity: 1
+    command:
+      verbosity: 1
+
+# Security (x509-only authentication)
+security:
+  authorization: enabled
+  clusterAuthMode: x509
+  javascriptEnabled: false
+
+# Set parameters for 1.0.0 MVP
+setParameter:
+  authenticationMechanisms: "MONGODB-X509"
+  tlsMode: "requireTLS"
+  maxLogSizeKB: 10240
+  failIndexKeyTooLong: false
+
+# Operation profiling
+operationProfiling:
+  mode: slowOp
+  slowOpThresholdMs: 100'
+
+# Generate hardened MongoDB configuration (MVP)
+generate_mongodb_hardened_config() {
+    local db_path="${1:-$DEFAULT_DB_PATH}"
+    local log_path="${2:-$DEFAULT_LOG_PATH}"
+    local port="${3:-$MONGODB_DEFAULT_PORT}"
+    local bind_ips="${4:-127.0.0.1,10.8.0.1}"
+    local max_connections="${5:-1024}"
+    local cache_size="${6:-1}"
+    local tls_cert_key="${7:-/etc/ssl/mongodb/mongodb-server.pem}"
+    local tls_ca="${8:-/etc/mongoCA/ca.crt}"
     
-    info "Testing MongoDB connection..."
+    info "Generating MongoDB 1.0.0 MVP configuration..."
     
-    local test_command='db.runCommand({connectionStatus: 1})'
+    # Add allowed IPs from configuration
+    local allowed_ips
+    allowed_ips=$(get_config_value "network.allowedIPs")
+    if [[ -n "$allowed_ips" && "$allowed_ips" != "[]" && "$allowed_ips" != "null" ]]; then
+        # Parse JSON array of IPs and add them
+        local additional_ips
+        additional_ips=$(echo "$allowed_ips" | jq -r '.[] | select(length > 0)' | paste -sd ',' -)
+        if [[ -n "$additional_ips" ]]; then
+            bind_ips="$bind_ips,$additional_ips"
+        fi
+    fi
     
-    if mongodb_execute "admin" "$test_command" "admin" "$username" "$password" >/dev/null 2>&1; then
-        success "MongoDB connection successful"
+    # Replace template variables
+    local config_content="$MONGODB_HARDENED_CONFIG_TEMPLATE"
+    config_content="${config_content//%DB_PATH%/$db_path}"
+    config_content="${config_content//%LOG_PATH%/$log_path}"
+    config_content="${config_content//%PORT%/$port}"
+    config_content="${config_content//%BIND_IP%/$bind_ips}"
+    config_content="${config_content//%MAX_CONNECTIONS%/$max_connections}"
+    config_content="${config_content//%CACHE_SIZE%/$cache_size}"
+    config_content="${config_content//%TLS_CERT_KEY_FILE%/$tls_cert_key}"
+    config_content="${config_content//%TLS_CA_FILE%/$tls_ca}"
+    
+    echo "$config_content"
+}
+
+# Get certificate subject DN from a client certificate (RFC2253)
+get_cert_subject_dn() {
+    local role="$1"
+    local cert_path="/etc/mongoCA/clients/${role}.crt"
+    [[ -f "$cert_path" ]] || { echo ""; return 1; }
+    local subj
+    subj=$(openssl x509 -in "$cert_path" -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/^subject=\s*//')
+    echo "$subj"
+}
+
+# Create MongoDB x509 users
+create_x509_users() {
+    info "Creating MongoDB x509 users for 1.0.0 MVP..."
+    
+    # Wait for MongoDB to be available
+    if ! wait_for_mongodb_ready; then
+        error "MongoDB is not ready for user creation"
+        return 1
+    fi
+    
+    # Create custom roles first
+    create_custom_roles
+    
+    # Create x509 users for each role
+    local roles=("root" "admin" "app" "backup")
+    for role in "${roles[@]}"; do
+        create_x509_user "$role"
+    done
+    
+    success "All x509 users created for 1.0.0 MVP"
+}
+
+# Create custom MongoDB roles
+create_custom_roles() {
+    info "Creating custom MongoDB roles for 1.0.0 MVP..."
+    
+    # Create hmsOpsAdmin role (cluster monitoring only)
+    local ops_admin_role='
+    db.createRole({
+        role: "hmsOpsAdmin",
+        privileges: [],
+        roles: [ { role: "clusterMonitor", db: "admin" } ]
+    })'
+    
+    mongodb_execute "admin" "$ops_admin_role" ""
+    
+    # Create hmsAppRW role (minimal DML, no DDL/index operations)
+    local app_rw_role='
+    db.createRole({
+        role: "hmsAppRW",
+        privileges: [
+            {
+                resource: { db: "", collection: "" },
+                actions: [ "find", "insert", "update", "remove" ]
+            }
+        ],
+        roles: []
+    })'
+    
+    mongodb_execute "admin" "$app_rw_role" ""
+    
+    success "Custom roles created"
+}
+
+# Create x509 user for specific role
+create_x509_user() {
+    local role_name="$1"
+    
+    info "Creating x509 user for role: $role_name"
+    
+    # Map role names to MongoDB roles
+    local mongodb_roles
+    case "$role_name" in
+        "root")
+            mongodb_roles='[ { role: "root", db: "admin" } ]'
+            ;;
+        "admin")
+            mongodb_roles='[ { role: "hmsOpsAdmin", db: "admin" } ]'
+            ;;
+        "app")
+            mongodb_roles='[ { role: "hmsAppRW", db: "admin" } ]'
+            ;;
+        "backup")
+            mongodb_roles='[ { role: "backup", db: "admin" } ]'
+            ;;
+        *)
+            error "Unknown role: $role_name"
+            return 1
+            ;;
+    esac
+    
+    # Determine x509 user DN from certificate
+    local user_dn
+    user_dn=$(get_cert_subject_dn "$role_name")
+    if [[ -z "$user_dn" ]]; then
+        warn "Could not determine subject DN for role '$role_name'"
+        return 1
+    fi
+
+    # Build clientSource list based on role
+    local client_sources=("127.0.0.1")
+    case "$role_name" in
+        root) client_sources+=("10.8.0.0/24") ;;
+        admin) client_sources=("10.8.0.0/24") ;;
+        app)
+            client_sources+=("10.8.0.0/24")
+            # Append allowed IPs from config
+            local allowed_ips
+            allowed_ips=$(get_config_value "network.allowedIPs")
+            if [[ -n "$allowed_ips" && "$allowed_ips" != "[]" && "$allowed_ips" != "null" ]]; then
+                while IFS= read -r ip; do
+                    [[ -n "$ip" && "$ip" != "null" ]] && client_sources+=("$ip")
+                done < <(echo "$allowed_ips" | jq -r '.[]')
+            fi
+            ;;
+        backup) client_sources=("127.0.0.1") ;;
+    esac
+
+    # Convert client_sources array to JSON
+    local cs_json
+    cs_json=$(printf '%s\n' "${client_sources[@]}" | jq -R -s -c 'split("\n")[:-1]')
+
+    # Create x509 user in $external with DN
+    local create_user_script="
+    db.getSiblingDB('$external').runCommand({
+      createUser: '$user_dn',
+      roles: $mongodb_roles,
+      authenticationRestrictions: [ { clientSource: $cs_json } ]
+    })"
+
+    if mongodb_execute "\$external" "$create_user_script" ""; then
+        success "x509 user created for $role_name"
+    else
+        warn "User $role_name may already exist or creation failed"
+    fi
+}
+
+# Implement just-in-time database grants for App role
+setup_just_in_time_grants() {
+    info "Setting up just-in-time database grants..."
+    
+    # Create monitoring script for new database access
+    create_jit_grants_monitor
+    
+    # Create systemd service for JIT grants
+    create_jit_grants_service
+    
+    # Enable the service
+    systemctl enable harden-mongo-server-jit-grants.service
+    systemctl start harden-mongo-server-jit-grants.service
+    
+    success "Just-in-time grants configured"
+}
+
+# Create JIT grants monitoring script
+create_jit_grants_monitor() {
+    local jit_script="/usr/local/bin/harden-mongo-server-jit-grants.sh"
+    
+    # Resolve App user DN from certificate
+    local app_dn
+    app_dn=$(get_cert_subject_dn "app")
+    
+    cat > "$jit_script" << EOF
+#!/bin/bash
+# Just-in-Time Database Grants Monitor
+# Automatically grants App role access to new business databases
+
+LOG_FILE="/var/log/harden-mongo-server/jit-grants.log"
+MONGO_CONFIG="/etc/mongod.conf"
+ADMIN_CERT="/etc/mongoCA/clients/admin.pem"
+CA_FILE="/etc/mongoCA/ca.crt"
+APP_USER_DN="${app_dn}"
+EXCLUDE_DBS="admin local config"
+
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# Get list of current databases
+get_databases() {
+mongo --tls --tlsCertificateKeyFile="$ADMIN_CERT" --tlsCAFile="$CA_FILE" \
+          --authenticationDatabase="\$external" --authenticationMechanism="MONGODB-X509" \
+          --eval "db.adminCommand('listDatabases').databases.forEach(function(db) { print(db.name) })" \
+          2>/dev/null | grep -v "MongoDB shell" | grep -v "connecting to"
+}
+
+# Check if database should be excluded
+is_excluded_database() {
+    local db_name="$1"
+    echo " $EXCLUDE_DBS " | grep -q " $db_name "
+}
+
+# Grant App role access to database
+grant_app_access() {
+    local db_name="$1"
+    
+    log_message "Granting App role access to database: $db_name"
+    
+    local grant_command="
+    use $db_name;
+    db.grantRolesToUser("$APP_USER_DN", [{ role: 'hmsAppRW', db: '$db_name' }]);
+    "
+    
+if mongo --tls --tlsCertificateKeyFile="$ADMIN_CERT" --tlsCAFile="$CA_FILE" \
+             --authenticationDatabase="\$external" --authenticationMechanism="MONGODB-X509" \
+             --eval "$grant_command" 2>/dev/null; then
+        log_message "Successfully granted App access to $db_name"
+    else
+        log_message "Failed to grant App access to $db_name"
+    fi
+}
+
+# Monitor for new databases
+monitor_databases() {
+    local known_dbs_file="/var/lib/harden-mongo-server/known-databases"
+    mkdir -p "$(dirname "$known_dbs_file")"
+    
+    # Initialize known databases file if it doesn't exist
+    if [[ ! -f "$known_dbs_file" ]]; then
+        get_databases > "$known_dbs_file"
+        log_message "Initialized known databases list"
+    fi
+    
+    while true; do
+        local current_dbs
+        current_dbs=$(get_databases)
+        
+        # Check for new databases
+        echo "$current_dbs" | while read -r db_name; do
+            [[ -z "$db_name" ]] && continue
+            
+            # Skip excluded databases
+            if is_excluded_database "$db_name"; then
+                continue
+            fi
+            
+            # Check if this is a new database
+            if ! grep -q "^$db_name\$" "$known_dbs_file"; then
+                log_message "New database detected: $db_name"
+                grant_app_access "$db_name"
+                echo "$db_name" >> "$known_dbs_file"
+            fi
+        done
+        
+        # Update known databases list
+        echo "$current_dbs" > "$known_dbs_file"
+        
+        # Sleep for 30 seconds before next check
+        sleep 30
+    done
+}
+
+# Main function
+main() {
+    log_message "Starting JIT grants monitor"
+    monitor_databases
+}
+
+main "$@"
+EOF
+    
+    chmod 755 "$jit_script"
+    chown root:root "$jit_script"
+}
+
+# Create JIT grants systemd service
+create_jit_grants_service() {
+    cat > "/etc/systemd/system/harden-mongo-server-jit-grants.service" << EOF
+[Unit]
+Description=MongoDB Just-in-Time Grants Monitor
+After=mongod.service
+Requires=mongod.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/harden-mongo-server-jit-grants.sh
+Restart=on-failure
+RestartSec=10
+User=root
+Group=root
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/harden-mongo-server /var/lib/harden-mongo-server
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    systemctl daemon-reload
+}
+
+# Ensure WiredTiger migration is safe
+ensure_safe_wiredtiger_migration() {
+    info "Ensuring safe WiredTiger migration..."
+    
+    # Check current storage engine
+    local current_engine
+    current_engine=$(get_mongodb_storage_engine)
+    
+    if [[ "$current_engine" == "wiredTiger" ]]; then
+        success "WiredTiger already in use"
         return 0
-    else
-        error "Failed to connect to MongoDB"
+    fi
+    
+    # Encrypted backup before migration (MVP)
+    info "Creating encrypted backup before WiredTiger migration..."
+    if ! create_encrypted_backup "all"; then
+        error "Failed to create encrypted backup before WiredTiger migration"
         return 1
     fi
+    
+    # Migration will be handled by configuration change
+    warn "WiredTiger migration will occur on next MongoDB restart"
+    success "Pre-migration encrypted backup created"
 }
 
-# Create MongoDB user
-create_mongodb_user() {
-    local username="$1"
-    local password="$2"
-    local database="${3:-admin}"
-    local roles="${4:-root}"
-    local admin_user="${5:-}"
-    local admin_password="${6:-}"
-    
-    info "Creating MongoDB user: $username"
-    
-    local create_user_command
-    if [[ "$roles" == "root" ]]; then
-        create_user_command="db.createUser({user: '$username', pwd: '$password', roles: ['root']})"
+# Get MongoDB storage engine
+get_mongodb_storage_engine() {
+    if command_exists mongo; then
+        mongo --eval "print(db.serverStatus().storageEngine.name)" --quiet 2>/dev/null || echo "unknown"
     else
-        create_user_command="db.createUser({user: '$username', pwd: '$password', roles: [$roles]})"
+        echo "unknown"
     fi
+}
+
+# Wait for MongoDB to be ready
+wait_for_mongodb_ready() {
+    local max_attempts=30
+    local attempt=0
     
-    if mongodb_execute "$database" "$create_user_command" "admin" "$admin_user" "$admin_password"; then
-        success "MongoDB user '$username' created successfully"
-    else
-        error "Failed to create MongoDB user '$username'"
+    while (( attempt < max_attempts )); do
+        if mongo --eval "db.adminCommand('ping')" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+        (( attempt++ ))
+    done
+    
+    return 1
+}
+
+# Execute MongoDB configuration phase for 1.0.0 MVP
+execute_mongodb_config_phase() {
+    info "Starting MongoDB configuration phase..."
+    
+    # Ensure safe WiredTiger migration
+    if ! ensure_safe_wiredtiger_migration; then
+        error "Failed to prepare for WiredTiger migration"
         return 1
     fi
-}
+    
+    # Generate hardened configuration
+    local config_content
+    config_content=$(generate_mongodb_hardened_config)
 
-# Change MongoDB user password
-change_mongodb_user_password() {
-    local username="$1"
-    local new_password="$2"
-    local database="${3:-admin}"
-    local admin_user="${4:-}"
-    local admin_password="${5:-}"
-    
-    info "Changing password for MongoDB user: $username"
-    
-    local change_password_command="db.changeUserPassword('$username', '$new_password')"
-    
-    if mongodb_execute "$database" "$change_password_command" "admin" "$admin_user" "$admin_password"; then
-        success "Password changed for MongoDB user '$username'"
-    else
-        error "Failed to change password for MongoDB user '$username'"
+    # Save LKG of current config, then write atomically
+    set_last_known_good "$MONGODB_CONFIG_FILE"
+    write_config_atomic "$MONGODB_CONFIG_FILE" "$config_content"
+
+    # Apply with graceful reload; validate via configtest; fallback to restart; rollback on failure
+    if ! apply_with_graceful_reload \
+        "mongod" \
+        "systemctl reload mongod" \
+        "mongod --config '$MONGODB_CONFIG_FILE' --configtest" \
+        "systemctl restart mongod"; then
+        warn "Reload/restart failed, rolling back to last-known-good"
+        rollback_to_last_known_good "$MONGODB_CONFIG_FILE" || true
+        systemctl restart mongod || true
         return 1
     fi
+    
+    success "MongoDB configuration phase completed"
 }
 
-# List MongoDB users
-list_mongodb_users() {
-    local admin_user="${1:-}"
-    local admin_password="${2:-}"
-    
-    info "Listing MongoDB users..."
-    
-    local list_users_command="db.getUsers()"
-    
-    mongodb_execute "admin" "$list_users_command" "admin" "$admin_user" "$admin_password"
+# Set Feature Compatibility Version to installed major.minor
+set_feature_compatibility_version() {
+    local ver
+    ver=$(get_mongodb_version)
+    [[ -z "$ver" || "$ver" == "not_installed" ]] && return 1
+    local major minor
+    IFS='.' read -r major minor _ <<< "$ver"
+    local fcv="${major}.${minor}"
+    local cmd="db.adminCommand({setFeatureCompatibilityVersion: '$fcv'})"
+    mongodb_execute "admin" "$cmd" "" "" "" >/dev/null 2>&1
 }
 
-# ================================
-# MongoDB Security Assessment
-# ================================
+# Validate minimal MongoDB requirements (TLS 1.2+ assumed)
+validate_mongodb_requirements() {
+    if ! command_exists mongod; then
+        error "mongod not found"
+        return 1
+    fi
+    return 0
+}
 
-# Check MongoDB security configuration
-check_mongodb_security() {
-    print_section "MongoDB Security Assessment"
+# Execute MongoDB provisioning phase
+execute_provision_phase() {
+    info "Starting MongoDB provisioning phase..."
     
-    local issues_found=0
-    
-    # Check if MongoDB is running
-    if [[ "$(get_mongodb_service_status)" != "active" ]]; then
-        report_issue "high" "MongoDB service is not running"
-        ((issues_found++))
-    else
-        success "MongoDB service is running"
+    # Wait for MongoDB to start with new configuration
+    if ! wait_for_mongodb_ready; then
+        error "MongoDB is not ready for provisioning"
+        return 1
     fi
     
-    # Check configuration file exists and has proper permissions
-    if [[ ! -f "$MONGODB_CONFIG_FILE" ]]; then
-        report_issue "high" "MongoDB configuration file not found" "Create configuration file with secure settings"
-        ((issues_found++))
-    else
-        local config_perms
-        config_perms=$(stat -c %a "$MONGODB_CONFIG_FILE" 2>/dev/null)
-        if [[ "$config_perms" -gt "644" ]]; then
-            report_issue "medium" "MongoDB configuration file permissions too permissive ($config_perms)" "Set permissions to 644 or more restrictive"
-            ((issues_found++))
-        fi
+    # Create x509 users
+    if ! create_x509_users; then
+        error "Failed to create x509 users"
+        return 1
+    fi
+
+    # Set FCV to current major.minor
+    set_feature_compatibility_version || warn "Failed to set FCV"
+    
+    # Set up just-in-time grants
+    if ! setup_just_in_time_grants; then
+        error "Failed to setup just-in-time grants"
+        return 1
     fi
     
-    # Check authentication settings
-    if [[ -f "$MONGODB_CONFIG_FILE" ]]; then
-        if grep -q "authorization.*enabled" "$MONGODB_CONFIG_FILE"; then
-            success "Authentication is enabled"
-        else
-            report_issue "critical" "MongoDB authentication is not enabled" "Enable authentication in MongoDB configuration"
-            ((issues_found++))
-        fi
-        
-        # Check bind IP
-        local bind_ip
-        bind_ip=$(grep "bindIp:" "$MONGODB_CONFIG_FILE" | awk '{print $2}')
-        if [[ "$bind_ip" == "0.0.0.0" || "$bind_ip" == "*" ]]; then
-            report_issue "high" "MongoDB is bound to all interfaces" "Restrict binding to specific IP addresses"
-            ((issues_found++))
-        elif [[ "$bind_ip" == "127.0.0.1" ]]; then
-            success "MongoDB is bound to localhost only"
-        else
-            info "MongoDB is bound to specific IP: $bind_ip"
-        fi
-        
-        # Check SSL/TLS
-        if grep -q "ssl:" "$MONGODB_CONFIG_FILE"; then
-            local ssl_mode
-            ssl_mode=$(grep -A5 "ssl:" "$MONGODB_CONFIG_FILE" | grep "mode:" | awk '{print $2}')
-            if [[ "$ssl_mode" == "requireSSL" ]]; then
-                success "SSL/TLS is required"
-            elif [[ "$ssl_mode" == "preferSSL" ]]; then
-                warn "SSL/TLS is preferred but not required"
-            else
-                report_issue "medium" "SSL/TLS is not properly configured" "Configure SSL/TLS encryption"
-                ((issues_found++))
-            fi
-        else
-            report_issue "medium" "SSL/TLS is not configured" "Configure SSL/TLS encryption"
-            ((issues_found++))
-        fi
-        
-        # Check JavaScript execution
-        if grep -q "javascriptEnabled.*false" "$MONGODB_CONFIG_FILE"; then
-            success "JavaScript execution is disabled"
-        else
-            report_issue "low" "JavaScript execution may be enabled" "Disable JavaScript execution for security"
-            ((issues_found++))
-        fi
-    fi
-    
-    # Check for default port
-    local current_port
-    if [[ -f "$MONGODB_CONFIG_FILE" ]]; then
-        current_port=$(grep "port:" "$MONGODB_CONFIG_FILE" | awk '{print $2}')
-    else
-        current_port="$MONGODB_DEFAULT_PORT"
-    fi
-    
-    if [[ "$current_port" == "$MONGODB_DEFAULT_PORT" ]]; then
-        report_issue "low" "MongoDB is using default port ($MONGODB_DEFAULT_PORT)" "Consider using a non-standard port"
-        ((issues_found++))
-    fi
-    
-    # Check log file permissions
-    local log_path
-    if [[ -f "$MONGODB_CONFIG_FILE" ]]; then
-        log_path=$(grep "path:" "$MONGODB_CONFIG_FILE" | awk '{print $2}')
-        if [[ -n "$log_path" && -f "$log_path" ]]; then
-            local log_perms
-            log_perms=$(stat -c %a "$log_path" 2>/dev/null)
-            if [[ "$log_perms" -gt "640" ]]; then
-                report_issue "low" "MongoDB log file permissions too permissive ($log_perms)" "Restrict log file permissions"
-                ((issues_found++))
-            fi
-        fi
-    fi
-    
-    print_subsection "Security Assessment Summary"
-    if ((issues_found == 0)); then
-        success "No critical security issues found"
-    else
-        warn "$issues_found security issues identified"
-    fi
-    
-    return $((issues_found > 0 ? 1 : 0))
+    success "MongoDB provisioning phase completed"
 }
 
 # ================================

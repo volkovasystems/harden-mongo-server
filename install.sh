@@ -207,65 +207,67 @@ install_systemd_services() {
     info "Installing systemd service files..."
     
     local service_dir="/etc/systemd/system"
-    
-    # Create monitoring service
-cat > "$service_dir/harden-mongo-server-monitor.service" << 'EOF'
+
+    # Backup service (daily encrypted backup)
+    cat > "$service_dir/harden-mongo-server-backup.service" << 'EOF'
 [Unit]
-Description=MongoDB Hardening Monitor
+Description=MongoDB Daily Backup Service
 After=mongod.service
-Requires=mongod.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/harden-mongo-server health-check
+ExecStart=/usr/local/bin/harden-mongo-server-backup.sh
 User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/harden-mongo-server /var/backups/harden-mongo-server
 EOF
 
-    # Create monitoring timer
-cat > "$service_dir/harden-mongo-server-monitor.timer" << 'EOF'
+    # Backup timer (daily at 02:00)
+    cat > "$service_dir/harden-mongo-server-backup.timer" << 'EOF'
 [Unit]
-Description=MongoDB Hardening Monitor Timer
-Requires=harden-mongo-server-monitor.service
+Description=Daily MongoDB Backup Timer
+Requires=harden-mongo-server-backup.service
 
 [Timer]
-OnCalendar=*:0/5
+OnCalendar=*-*-* 02:00
+RandomizedDelaySec=30m
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
 
-    # Create metrics collection service
-cat > "$service_dir/harden-mongo-server-metrics.service" << 'EOF'
+    # Certificate rotation service (monthly)
+    cat > "$service_dir/harden-mongo-server-cert-rotate.service" << 'EOF'
 [Unit]
-Description=MongoDB Hardening Metrics Collection
-After=mongod.service
-Requires=mongod.service
+Description=MongoDB Certificate Rotation Service
+After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/harden-mongo-server metrics collect
+ExecStart=/usr/local/bin/harden-mongo-server-cert-rotate.sh
 User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/harden-mongo-server /var/backups/harden-mongo-server /etc/mongoCA /etc/openvpn
 EOF
 
-    # Create metrics timer
-cat > "$service_dir/harden-mongo-server-metrics.timer" << 'EOF'
+    # Certificate rotation timer (monthly)
+    cat > "$service_dir/harden-mongo-server-cert-rotate.timer" << 'EOF'
 [Unit]
-Description=MongoDB Hardening Metrics Timer
-Requires=harden-mongo-server-metrics.service
+Description=Monthly Certificate Rotation Timer
+Requires=harden-mongo-server-cert-rotate.service
 
 [Timer]
-OnCalendar=hourly
+OnCalendar=monthly
+RandomizedDelaySec=1h
 Persistent=true
 
 [Install]
@@ -275,9 +277,9 @@ EOF
     # Reload systemd
     systemctl daemon-reload
     
-success "systemd service files installed"
-    info "To enable monitoring: systemctl enable --now harden-mongo-server-monitor.timer"
-    info "To enable metrics: systemctl enable --now harden-mongo-server-metrics.timer"
+    success "systemd service files installed"
+    info "To enable backup timer:   systemctl enable --now harden-mongo-server-backup.timer"
+    info "To enable cert rotation:  systemctl enable --now harden-mongo-server-cert-rotate.timer"
 }
 
 # Set up log rotation
@@ -300,6 +302,25 @@ EOF
     success "Log rotation configured"
 }
 
+# Ensure mongod auto-restarts on failure via systemd drop-in
+ensure_mongod_restart_dropin() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+    local dropin_dir="/etc/systemd/system/mongod.service.d"
+    local dropin_file="$dropin_dir/override.conf"
+    mkdir -p "$dropin_dir"
+    if [[ ! -f "$dropin_file" ]]; then
+        cat > "$dropin_file" << 'EOF'
+[Service]
+Restart=on-failure
+RestartSec=5s
+EOF
+        systemctl daemon-reload
+        info "Installed mongod Restart=on-failure drop-in"
+    fi
+}
+
 # Create uninstall script
 create_uninstaller() {
     info "Creating uninstaller..."
@@ -316,10 +337,10 @@ echo "Uninstalling MongoDB Hardening Utility..."
 
 # Stop and disable services
 if command -v systemctl >/dev/null 2>&1; then
-systemctl stop harden-mongo-server-monitor.timer 2>/dev/null || true
-    systemctl stop harden-mongo-server-metrics.timer 2>/dev/null || true
-    systemctl disable harden-mongo-server-monitor.timer 2>/dev/null || true
-    systemctl disable harden-mongo-server-metrics.timer 2>/dev/null || true
+    systemctl stop harden-mongo-server-backup.timer 2>/dev/null || true
+    systemctl stop harden-mongo-server-cert-rotate.timer 2>/dev/null || true
+    systemctl disable harden-mongo-server-backup.timer 2>/dev/null || true
+    systemctl disable harden-mongo-server-cert-rotate.timer 2>/dev/null || true
 fi
 
 # Remove files and directories
@@ -359,22 +380,22 @@ Installation Details:
   System Link: /usr/bin/harden-mongo-server
 
 Usage:
-  harden-mongo-server --help          Show help information
-  harden-mongo-server system-info     Display system information
-  harden-mongo-server configure       Run configuration wizard
-  harden-mongo-server harden standard Apply standard security hardening
+  harden-mongo-server --help
+  harden-mongo-server [--config PATH] [--dry-run]
+  harden-mongo-server --allow-ip-add IP
+  harden-mongo-server --allow-ip-remove IP
+  harden-mongo-server --restore PATH
 
 Optional Services:
-systemctl enable --now harden-mongo-server-monitor.timer
-systemctl enable --now harden-mongo-server-metrics.timer
+  systemctl enable --now harden-mongo-server-backup.timer
+  systemctl enable --now harden-mongo-server-cert-rotate.timer
 
 To uninstall:
 $BIN_DIR/uninstall-harden-mongo-server
 
 ${YELLOW}Next Steps:${NC}
 1. Review the documentation: $SHARE_DIR/README.md
-3. Run 'harden-mongo-server system-info' to analyze your system
-4. Run 'harden-mongo-server configure' for interactive setup
+2. Run 'sudo harden-mongo-server' to bootstrap and harden the server
 
 EOF
 }
@@ -395,6 +416,9 @@ echo "MongoDB Server Hardening Tool Installer v$INSTALLER_VERSION"
     install_systemd_services
     setup_log_rotation
     create_uninstaller
+
+    # Ensure mongod has Restart=on-failure drop-in
+    ensure_mongod_restart_dropin
     
     show_summary
 }

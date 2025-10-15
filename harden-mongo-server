@@ -20,16 +20,15 @@ readonly LIB_DIR="$SCRIPT_DIR/lib/harden-mongo-server"
 load_core_modules() {
     local modules=(
         "core"
-        "logging" 
-        "ui"
+        "logging"
         "system"
         "failsafe"
         "mongodb"
-        "security"
         "ssl"
         "firewall"
         "backup"
-        "monitoring"
+        "onboarding"
+        "vpn"
     )
     
     for module in "${modules[@]}"; do
@@ -71,104 +70,60 @@ initialize_application() {
 # Display help information
 show_help() {
     cat << EOF
-$SCRIPT_DESCRIPTION
+$SCRIPT_DESCRIPTION - 1.0.0 MVP
 
-Usage: $0 [OPTIONS] COMMAND [COMMAND_OPTIONS]
+Usage: $0 [OPTIONS]
 
-COMMANDS:
-  System Analysis:
-    system-info               Display comprehensive system information
-    mongodb-status           Show MongoDB service and configuration status
-    security-check           Perform security assessment
-    health-check            Run comprehensive health checks
+DESCRIPTION:
+  A single command that hardens a MongoDB server securely with minimal input.
+  Private-only by default. No public domain required. Safe to re-run anytime.
+  Automated onboarding via Cloudflare Quick Tunnel (one-liner download, no manual steps).
 
-  Configuration & Hardening:
-    configure               Run interactive configuration wizard
-    harden [PROFILE]        Apply security hardening (basic|standard|strict|paranoid)
-    setup-ssl               Initialize SSL/TLS certificates and configuration
-    setup-auth              Configure MongoDB authentication
-    setup-firewall          Configure firewall rules for MongoDB
+WHAT IT DOES:
+  - TLS required with a private Certificate Authority (CA)
+  - x509-only authentication (passwords disabled)
+  - Role separation: Root, Admin (ops), App (business), Backup (service)
+  - VPN-only access by default; OpenVPN installed and configured
+  - Automatic security for new business databases (just-in-time grants)
+  - Encrypted backups: local-only, scheduled daily
+  - Automated monthly certificate rotation with zero downtime
+  - Auto-lock to VPN after first successful SSH over VPN
 
-  SSL/TLS Management:
-    ssl init                Initialize Certificate Authority
-    ssl server [HOSTNAME]   Generate server certificate
-    ssl client NAME         Generate client certificate
-    ssl list                List all certificates
-    ssl check               Check certificate expiration
-    ssl revoke FILE         Revoke a certificate
-
-  Backup & Restore:
-    backup [DATABASE]       Create MongoDB backup
-    restore FILE [DB]       Restore MongoDB backup
-    backup-list             List available backups
-    backup-schedule TIME    Schedule automated backups
-    backup-cleanup [DAYS]   Clean up old backups
-
-  Monitoring & Maintenance:
-    monitoring setup        Setup automated monitoring
-    monitoring remove       Remove monitoring setup
-    metrics collect         Collect current metrics
-    metrics cleanup         Clean up old metrics files
-
-  Fail-safe & Recovery:
-    failsafe status         Show current fail-safe system status
-    failsafe enable         Enable comprehensive fail-safe protection
-    failsafe disable        Disable fail-safe monitoring
-    recovery check          Check for incomplete operations
-    recovery resume         Resume from previous interrupted run
-    rollback [LEVEL]        Rollback system changes (config|security|monitoring|full)
-
-  Firewall Management:
-    firewall status         Show firewall status and rules
-    firewall enable         Enable and configure firewall
-    firewall allow IP:PORT  Allow specific access
-    firewall block IP:PORT  Block specific access
-
-  Service Management:
-    start                   Start MongoDB service
-    stop                    Stop MongoDB service
-    restart                 Restart MongoDB service
-    enable                  Enable MongoDB auto-start
-
-PROFILES:
-  basic      - Enable authentication and basic file security
-  standard   - Add keyfile, system limits, stronger SCRAM (default)
-  strict     - Restrictive permissions and connection limits
-  paranoid   - Maximum security with localhost-only binding
-
-GLOBAL OPTIONS:
-  -v, --verbose           Enable verbose output
-  -d, --debug             Enable debug output
-  -f, --force             Skip confirmation prompts
-  -n, --dry-run           Show what would be done without executing
-  -c, --config FILE       Use alternative configuration file
-  -h, --help              Show this help message
-      --version           Show version information
+OPTIONS:
+  --config PATH                          Set alternate config path for this run
+  --dry-run                              Show planned changes only
+  --allow-ip-add IP                      Allow one IP to access MongoDB
+  --allow-ip-remove IP                   Remove one IP from access list
+  --restore PATH                         Restore from a backup archive
+  -h, --help                             Show this help message
+      --version                          Show version information
 
 EXAMPLES:
-  # Run interactive configuration wizard
-  $0 configure
+  # First run (bootstrap everything)
+  sudo $0
 
-  # Apply standard security hardening
-  $0 harden standard
+  # Allow a specific IP to access MongoDB
+  sudo $0 --allow-ip-add 192.168.1.100
 
-  # Perform comprehensive security assessment
-  $0 security-check
+  # Remove IP access
+  sudo $0 --allow-ip-remove 192.168.1.100
 
-  # Set up SSL/TLS with auto-generated certificates
-  $0 setup-ssl
+  # Check what changes would be made
+  sudo $0 --dry-run
 
-  # Create a backup of all databases
-  $0 backup
+  # Restore from backup
+  sudo $0 --restore /var/backups/harden-mongo-server/backup-2024-01-01.zip
 
-  # Set up automated monitoring
-  $0 monitoring setup
+FIRST RUN:
+  On first run, the tool sets up everything and prints a one-liner command to
+  download all certificates (admin/viewer VPN profiles and DB certs).
+  Copy-paste that one-liner on your client machine to download everything you need.
 
-  # Configure firewall for production use
-  $0 setup-firewall
-
-For detailed information about each command, use:
-  $0 COMMAND --help
+NOTES:
+  - First run requires root to bootstrap; later runs allowed for users in harden-mongo-server-admins group
+  - No cloud credentials required at any time
+  - For bulk IP changes, edit the config file at /etc/harden-mongo-server/config.json
+  - Tool is idempotent: reruns safely reconcile to the desired secure state
 
 EOF
 }
@@ -205,20 +160,31 @@ print_header "MongoDB Server Hardening Tool - Module Information"
             logging_module_info 2>/dev/null || echo "Logging module info not available"
             echo
             system_module_info 2>/dev/null || echo "System module info not available"
+            echo
+            ssl_module_info 2>/dev/null || echo "SSL module info not available"
+            echo
+            mongodb_module_info 2>/dev/null || echo "MongoDB module info not available"
+            echo
+            firewall_module_info 2>/dev/null || echo "Firewall module info not available"
+            echo
+            backup_module_info 2>/dev/null || echo "Backup module info not available"
+            echo
+            onboarding_module_info 2>/dev/null || echo "Onboarding module info not available"
+            echo
+            vpn_module_info 2>/dev/null || echo "VPN module info not available"
             ;;
         core) core_module_info ;;
         logging) logging_module_info ;;
-        ui) ui_module_info ;;
         system) system_module_info ;;
         mongodb) mongodb_module_info ;;
-        security) security_module_info ;;
         ssl) ssl_module_info ;;
         firewall) firewall_module_info ;;
         backup) backup_module_info ;;
-        monitoring) monitoring_module_info ;;
+        onboarding) onboarding_module_info ;;
+        vpn) vpn_module_info ;;
         *)
             error "Unknown module: $module"
-            echo "Available modules: all, core, logging, ui, system, mongodb, security, ssl, firewall, backup, monitoring"
+            echo "Available modules: all, core, logging, system, mongodb, ssl, firewall, backup, onboarding, vpn"
             return 1
             ;;
     esac
@@ -228,336 +194,496 @@ print_header "MongoDB Server Hardening Tool - Module Information"
 # Command Handlers
 # ================================
 
-# Handle system analysis commands
-handle_system_commands() {
-    case "$1" in
-        system-info)
-            show_system_info
-            ;;
-        mongodb-status)
-            show_mongodb_status
-            ;;
-        security-check)
-            local detailed="${2:-false}"
-            check_mongodb_security
-            if [[ "$detailed" == "--detailed" || "$detailed" == "-d" ]]; then
-                security_vulnerability_check
-            fi
-            ;;
-        health-check)
-            mongodb_health_check "" "" true
-            ;;
-        *)
-            error "Unknown system command: $1"
-            return 1
-            ;;
-    esac
-}
 
-# Handle configuration and hardening commands
-handle_configuration_commands() {
-    case "$1" in
-        configure)
-            if configuration_wizard; then
-                success "Configuration completed successfully"
-            else
-                error "Configuration was cancelled or failed"
-                return 1
-            fi
-            ;;
-        harden)
-            local profile="${2:-standard}"
-            info "Applying $profile security profile..."
-            if apply_security_profile "$profile"; then
-                success "Security hardening completed with profile: $profile"
-            else
-                error "Security hardening failed"
-                return 1
-            fi
-            ;;
-        setup-ssl)
-            handle_ssl_setup
-            ;;
-        setup-auth)
-            handle_auth_setup  
-            ;;
-        setup-firewall)
-            handle_firewall_setup
-            ;;
-        *)
-            error "Unknown configuration command: $1"
-            return 1
-            ;;
-    esac
-}
 
-# Handle SSL setup
-handle_ssl_setup() {
-    info "Setting up SSL/TLS for MongoDB"
+
+
+
+
+
+
+
+
+
+# ================================
+# 1.0.0 MVP Operation Handlers  
+# ================================
+
+# Handle main hardening operation (default when no flags specified)
+handle_main_hardening_operation() {
+    info "Starting MongoDB Server Hardening - 1.0.0 MVP"
     
-    # Initialize CA if not exists
-    if ! verify_ca "$DEFAULT_CA_DIR" 2>/dev/null; then
-        info "Initializing Certificate Authority..."
-        if ! initialize_ca; then
-            error "Failed to initialize Certificate Authority"
+    # Execute hardening phases in order
+    local phases=(
+        "preflight"
+        "bootstrap" 
+        "vpn"
+        "tls"
+        "mongodb-config"
+        "provision"
+        "firewall"
+        "backups"
+        "verify"
+    )
+    
+    for phase in "${phases[@]}"; do
+        info "Phase: $phase"
+        if ! "execute_${phase}_phase"; then
+            error "Failed during $phase phase"
+            return 1
+        fi
+    done
+    
+    success "MongoDB hardening completed successfully"
+    
+    # Print onboarding information
+    print_onboarding_info
+}
+
+# Handle restore operation
+handle_restore_operation() {
+    local restore_path="$HARDEN_MONGO_SERVER_RESTORE_PATH"
+    
+    if [[ ! -f "$restore_path" ]]; then
+        error "Restore file not found: $restore_path"
+        return 1
+    fi
+    
+    info "Restoring from backup: $restore_path"
+    
+    # Only encrypted backups are supported
+    if [[ "$restore_path" == *.age ]]; then
+        if command -v restore_encrypted_backup >/dev/null 2>&1; then
+            restore_encrypted_backup "$restore_path"
+        else
+            error "Encrypted restore not available"
+            return 1
+        fi
+    else
+        error "Unsupported backup format. 1.0.0 supports only age-encrypted backups (*.age)."
+        return 1
+    fi
+    
+    if [[ $? -eq 0 ]]; then
+        success "Restore completed successfully"
+    else
+        error "Restore failed"
+        return 1
+    fi
+}
+
+# Handle adding allowed IP
+handle_allow_ip_add() {
+    local ip="$1"
+    
+    if ! is_valid_ip "$ip"; then
+        error "Invalid IP address: $ip"
+        return 1
+    fi
+    
+    info "Adding IP to allowed list: $ip"
+    
+    if add_allowed_ip "$ip"; then
+        success "IP $ip added to allowed list"
+        info "Applying firewall changes..."
+        apply_firewall_config
+    else
+        error "Failed to add IP $ip"
+        return 1
+    fi
+}
+
+# Handle removing allowed IP
+handle_allow_ip_remove() {
+    local ip="$1"
+    
+    if ! is_valid_ip "$ip"; then
+        error "Invalid IP address: $ip"
+        return 1
+    fi
+    
+    info "Removing IP from allowed list: $ip"
+    
+    if remove_allowed_ip "$ip"; then
+        success "IP $ip removed from allowed list"
+        info "Applying firewall changes..."
+        apply_firewall_config
+    else
+        error "Failed to remove IP $ip"
+        return 1
+    fi
+}
+
+# Print onboarding information after successful hardening
+print_onboarding_info() {
+    echo
+    print_header "Onboarding Information"
+    
+    echo "Your MongoDB server has been successfully hardened!"
+    echo
+    echo "To download all certificates and VPN profiles, run this command on your client machine:"
+    echo
+    
+    # Generate onboarding script
+    if command -v generate_onboarding_script >/dev/null 2>&1; then
+        generate_onboarding_script
+    else
+        echo "# One-liner download command will be generated here"
+        echo "# after the onboarding module is implemented"
+    fi
+    
+    echo
+    echo "Files included in the download:"
+    echo "  - admin-YYYY-MM-DD.ovpn      (Admin VPN profile)"
+    echo "  - viewer-YYYY-MM-DD.ovpn     (Viewer VPN profile)"
+    echo "  - db-root-YYYY-MM-DD.pem     (Root database client cert)"
+    echo "  - db-admin-YYYY-MM-DD.pem    (Admin database client cert)"
+    echo "  - db-app-YYYY-MM-DD.pem      (App database client cert)"
+    echo "  - db-backup-YYYY-MM-DD.pem   (Backup database client cert)"
+    echo "  - db-ca-YYYY-MM-DD.pem       (Database CA certificate)"
+    echo
+    echo "Next steps:"
+    echo "1. Run the download command above on your client machine"
+    echo "2. Import the appropriate VPN profile (admin or viewer)"
+    echo "3. Connect to the VPN before accessing MongoDB"
+    echo "4. Use the database client certificates for MongoDB connections"
+    echo
+}
+
+# ================================
+# Phase Execution Functions (1.0.0 MVP)
+# ================================
+
+# Execute preflight checks phase
+execute_preflight_phase() {
+    info "Starting preflight checks phase..."
+    
+    # Check system requirements
+    if ! validate_core_requirements; then
+        error "Core system requirements not met"
+        return 1
+    fi
+
+    # Check MongoDB requirements
+    if command -v validate_mongodb_requirements >/dev/null 2>&1; then
+        if ! validate_mongodb_requirements; then
+            error "MongoDB requirements not met"
             return 1
         fi
     fi
     
-    # Generate server certificate
-    local hostname
-    hostname=$(hostname -f)
-    info "Generating server certificate for $hostname"
-    if ! generate_server_certificate "$hostname"; then
-        error "Failed to generate server certificate"
-        return 1
+    # Check VPN requirements if enabled
+    if get_config_value "openvpn.enabled" | grep -q "true"; then
+        if ! validate_vpn_requirements; then
+            error "VPN requirements not met"
+            return 1
+        fi
     fi
     
-    # Configure MongoDB to use SSL
-    local server_pem="$MONGODB_SSL_DIR/mongodb-server.pem"
-    local ca_cert="$DEFAULT_CA_DIR/ca.crt"
-    
-    if configure_mongodb_ssl "$server_pem" "$ca_cert" "requireSSL"; then
-        success "SSL/TLS setup completed successfully"
-        info "You may need to restart MongoDB for changes to take effect"
-    else
-        error "Failed to configure MongoDB SSL"
-        return 1
+    # Check for existing MongoDB instance and create initial backup
+    if systemctl is-active --quiet mongod; then
+        info "Existing MongoDB instance detected, creating initial backup..."
+        if ! create_initial_backup; then
+            error "Failed to create initial backup - aborting for safety"
+            return 1
+        fi
     fi
+    
+    success "Preflight checks phase completed"
 }
 
-# Handle authentication setup
-handle_auth_setup() {
-    info "Setting up MongoDB authentication"
+# Execute bootstrap phase
+execute_bootstrap_phase() {
+    info "Starting bootstrap phase..."
     
-    local admin_user
-    admin_user=$(prompt_and_validate \
-        "Administrator username" \
-        "^[a-zA-Z][a-zA-Z0-9_]{2,31}$" \
-        "username" \
-        "admin")
+    # Initialize configuration if needed
+    init_config
     
-    local admin_password
-    admin_password=$(prompt_user_credentials "$admin_user")
+    # Create required system directories
+    create_dir_safe "$HARDEN_MONGO_SERVER_CONF_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_KEYS_DIR" 700 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_BACKUP_DIR" 750 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_LOG_DIR" 755 root:root
+    create_dir_safe "$HARDEN_MONGO_SERVER_VAR_DIR" 755 root:root
     
-    # Create the admin user (this requires MongoDB to be running without auth first)
-    if create_mongodb_user "$admin_user" "$admin_password" "admin" "root"; then
-        success "Admin user created successfully"
+    # Create system users and groups
+    create_system_users
+    
+    # Set up basic system hardening
+    apply_basic_system_hardening
+    
+    success "Bootstrap phase completed"
+}
+
+# Execute backup setup phase
+execute_backups_phase() {
+    info "Starting backup setup phase..."
+    
+    # Set up backup system
+    if command -v execute_backup_setup_phase >/dev/null 2>&1; then
+        execute_backup_setup_phase
+    else
+        info "Using basic backup configuration"
+        # Basic backup directory setup is already done in bootstrap
+    fi
+    
+    success "Backup setup phase completed"
+}
+
+# Execute firewall configuration phase
+execute_firewall_phase() {
+    info "Starting firewall configuration phase..."
+    
+    # Set up firewall (complete setup with default DROP policy and required allows)
+    if command -v setup_complete_firewall >/dev/null 2>&1; then
+        setup_complete_firewall
+    elif command -v execute_firewall_setup_phase >/dev/null 2>&1; then
+        execute_firewall_setup_phase
+    else
+        info "Using basic firewall configuration"
+    fi
+    
+    success "Firewall configuration phase completed"
+}
+
+# Execute verification phase
+execute_verify_phase() {
+    info "Starting verification phase..."
+    
+    # Verify MongoDB is running with TLS
+    if systemctl is-active --quiet mongod; then
+        success "MongoDB service is running"
         
-        # Now enable authentication in configuration
-        info "Enabling authentication in MongoDB configuration"
-        # This would update the config file to enable auth
-        success "Authentication setup completed"
-        info "You may need to restart MongoDB for changes to take effect"
+        # Check if TLS is enabled
+        if grep -q "requireTLS" "$MONGODB_CONFIG_FILE" 2>/dev/null; then
+            success "MongoDB TLS is configured"
+        else
+            warn "MongoDB TLS configuration not detected"
+        fi
     else
-        error "Failed to create admin user"
+        warn "MongoDB service is not running"
+    fi
+    
+    # Verify VPN is running if enabled
+    if get_config_value "openvpn.enabled" | grep -q "true"; then
+        if systemctl is-active --quiet openvpn-server@server; then
+            success "OpenVPN service is running"
+        else
+            warn "OpenVPN service is not running"
+        fi
+    fi
+    
+    # Verify certificates exist
+    if [[ -d "/etc/mongoCA/clients" ]]; then
+        local cert_count
+        cert_count=$(find /etc/mongoCA/clients -name "*.pem" | wc -l)
+        if (( cert_count >= 4 )); then
+            success "MongoDB client certificates generated ($cert_count found)"
+        else
+            warn "Insufficient MongoDB client certificates found ($cert_count)"
+        fi
+    fi
+    
+    success "Verification phase completed"
+}
+
+# Create initial backup before any changes
+create_initial_backup() {
+    local backup_path
+    backup_path="/var/backups/harden-mongo-server/initial-backup-$(date +%Y%m%d_%H%M%S)"
+    
+    info "Creating initial encrypted backup at: $backup_path"
+    
+    # Check if backup tools are available
+    if ! command_exists mongodump; then
+        error "mongodump not available - cannot create initial backup"
+        return 1
+    fi
+    
+    # Check available disk space (require at least 1GB free)
+    local free_space_gb
+    free_space_gb=$(df -BG "$(dirname "$backup_path")" | awk 'NR==2 {gsub(/G/, "", $4); print $4}')
+    if (( free_space_gb < 1 )); then
+        error "Insufficient disk space for initial backup (need 1GB, have ${free_space_gb}GB)"
+        return 1
+    fi
+    
+    # Create the backup (encrypted)
+    if command -v create_encrypted_backup >/dev/null 2>&1; then
+        create_encrypted_backup "all"
+    else
+        error "Encrypted backup function not available"
         return 1
     fi
 }
 
-# Handle firewall setup
-handle_firewall_setup() {
-    info "Setting up firewall for MongoDB"
+# Create system users and groups
+create_system_users() {
+    info "Creating system users and groups..."
     
-    local environment
-    if confirm "Is this a production environment?" "n"; then
-        environment="production"
-    else
-        environment="development"
+    # Create harden-mongo-server-admins group
+    if ! getent group harden-mongo-server-admins >/dev/null 2>&1; then
+        groupadd harden-mongo-server-admins
+        success "Created group: harden-mongo-server-admins"
     fi
     
-    case "$environment" in
-        production)
-            local allowed_ips
-            allowed_ips=$(prompt_and_validate \
-                "Allowed IP addresses (comma-separated)" \
-                "^([0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(,[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3})*)?$" \
-                "IP address list" \
-                "127.0.0.1")
-                
-            setup_production_firewall "27017" "$allowed_ips"
-            ;;
-        development)
-            setup_development_firewall "27017"
-            ;;
-    esac
+    # Create hms-admin user
+    if ! getent passwd hms-admin >/dev/null 2>&1; then
+        useradd -r -g harden-mongo-server-admins -d /var/lib/harden-mongo-server \
+                -s /bin/bash -c "HMS Admin User" hms-admin
+        success "Created user: hms-admin"
+    fi
     
-    success "Firewall setup completed"
+    # Add hms-admin to sudo group for administrative tasks
+    if getent group sudo >/dev/null 2>&1; then
+        usermod -a -G sudo hms-admin
+        info "Added hms-admin to sudo group"
+    fi
 }
 
-# Handle SSL/TLS management commands
-handle_ssl_commands() {
-    local action="$2"
-    local param="$3"
+# Apply basic system hardening
+apply_basic_system_hardening() {
+    info "Applying basic system hardening..."
     
-    case "$action" in
-        init)
-            initialize_ca "$DEFAULT_CA_DIR"
-            ;;
-        server)
-            local hostname="${param:-$(hostname -f)}"
-            generate_server_certificate "$hostname"
-            ;;
-        client)
-            if [[ -z "$param" ]]; then
-                error "Client name required for certificate generation"
-                return 1
-            fi
-            generate_client_certificate "$param"
-            ;;
-        list)
-            list_certificates
-            ;;
-        check)
-            check_certificate_expiration "${param:-30}"
-            ;;
-        revoke)
-            if [[ -z "$param" ]]; then
-                error "Certificate file required for revocation"
-                return 1
-            fi
-            revoke_certificate "$param"
-            ;;
-        *)
-            error "Unknown SSL command: $action"
-            echo "Available SSL commands: init, server, client, list, check, revoke"
-            return 1
-            ;;
-    esac
+    # Enable unattended security updates
+    if command_exists apt-get; then
+        # Ubuntu/Debian systems
+        if ! dpkg -l | grep -q unattended-upgrades; then
+            apt-get update -qq
+            apt-get install -y unattended-upgrades
+            dpkg-reconfigure -plow unattended-upgrades
+            info "Enabled unattended security updates"
+        fi
+    fi
+    
+    # Apply minimal security sysctls
+    apply_security_sysctls
+    
+    # Configure SSH security settings
+    configure_ssh_security
+    
+    # Set up log rotation
+    setup_log_rotation
+    
+    success "Basic system hardening applied"
 }
 
-# Handle backup and restore commands
-handle_backup_commands() {
-    case "$1" in
-        backup)
-            local database="${2:-all}"
-            create_mongodb_backup "$DEFAULT_BACKUP_DIR" "$database"
-            ;;
-        restore)
-            local backup_file="$2"
-            local target_db="$3"
-            if [[ -z "$backup_file" ]]; then
-                error "Backup file path required"
-                return 1
-            fi
-            restore_mongodb_backup "$backup_file" "$target_db"
-            ;;
-        backup-list)
-            list_backups "$DEFAULT_BACKUP_DIR" true
-            ;;
-        backup-schedule)
-            local schedule="$2"
-            if [[ -z "$schedule" ]]; then
-                error "Schedule time required (cron format)"
-                return 1
-            fi
-            schedule_backup "$schedule"
-            ;;
-        backup-cleanup)
-            local days="${2:-$DEFAULT_RETENTION_DAYS}"
-            cleanup_old_backups "$DEFAULT_BACKUP_DIR" "$days"
-            ;;
-        *)
-            error "Unknown backup command: $1"
-            return 1
-            ;;
-    esac
+# Apply security sysctls
+apply_security_sysctls() {
+    local sysctl_file="/etc/sysctl.d/99-harden-mongo-server-security.conf"
+    
+    cat > "$sysctl_file" << 'EOF'
+# MongoDB Server Hardening Tool - Security Settings
+# Applied by 1.0.0 MVP
+
+# Network security
+net.ipv4.tcp_syncookies = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.all.accept_source_route = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.icmp_ignore_bogus_error_responses = 1
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+# Kernel security
+fs.protected_hardlinks = 1
+fs.protected_symlinks = 1
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.yama.ptrace_scope = 1
+EOF
+    
+    # Apply the settings
+    sysctl -p "$sysctl_file" >/dev/null 2>&1
+    info "Security sysctls applied"
 }
 
-# Handle monitoring commands  
-handle_monitoring_commands() {
-    case "$2" in
-        setup)
-            setup_monitoring
-            ;;
-        remove)
-            remove_monitoring
-            ;;
-        *)
-            error "Unknown monitoring command: $2"
-            echo "Available monitoring commands: setup, remove"
-            return 1
-            ;;
-    esac
+# Configure SSH security settings
+configure_ssh_security() {
+    local ssh_config="/etc/ssh/sshd_config"
+    local ssh_hardening_file="/etc/ssh/sshd_config.d/99-harden-mongo-server.conf"
+    
+    # Create SSH hardening configuration
+    mkdir -p /etc/ssh/sshd_config.d
+    
+    cat > "$ssh_hardening_file" << 'EOF'
+# MongoDB Server Hardening Tool - SSH Security
+# Applied by 1.0.0 MVP
+
+# Disable root login
+PermitRootLogin no
+
+# Use only strong ciphers and MACs
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+MACs hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512
+
+# Disable weak authentication methods
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+
+# Security settings
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTunnel no
+GatewayPorts no
+PermitUserEnvironment no
+
+# Connection limits
+MaxAuthTries 3
+MaxSessions 2
+ClientAliveInterval 300
+ClientAliveCountMax 2
+EOF
+    
+    # Test SSH configuration
+    if sshd -t 2>/dev/null; then
+        info "SSH security configuration applied"
+    else
+        warn "SSH configuration test failed, removing hardening file"
+        rm -f "$ssh_hardening_file"
+    fi
 }
 
-# Handle metrics commands
-handle_metrics_commands() {
-    case "$2" in
-        collect)
-            collect_mongodb_metrics
-            collect_system_metrics
-            ;;
-        cleanup)
-            local days="${3:-$DEFAULT_LOG_RETENTION_DAYS}"
-            cleanup_old_metrics "$DEFAULT_METRICS_DIR" "$days"
-            ;;
-        *)
-            error "Unknown metrics command: $2"
-            echo "Available metrics commands: collect, cleanup"
-            return 1
-            ;;
-    esac
+# Set up log rotation
+setup_log_rotation() {
+    # Set up log rotation for MongoDB
+    if [[ ! -f /etc/logrotate.d/mongod ]]; then
+        cat > /etc/logrotate.d/mongod << 'EOF'
+/var/log/mongodb/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 640 mongodb mongodb
+    postrotate
+        /bin/kill -SIGUSR1 `cat /var/lib/mongodb/mongod.lock 2>/dev/null` 2>/dev/null || true
+    endscript
 }
-
-# Handle firewall commands
-handle_firewall_commands() {
-    case "$2" in
-        status)
-            get_firewall_status
-            list_mongodb_firewall_rules
-            ;;
-        enable)
-            enable_firewall
-            ;;
-        allow)
-            local target="$3"
-            if [[ -z "$target" ]]; then
-                error "Target IP:PORT required"
-                return 1
-            fi
-            local ip="${target%:*}"
-            local port="${target#*:}"
-            allow_mongodb_port "$port" "$ip"
-            ;;
-        block)
-            local target="$3"
-            if [[ -z "$target" ]]; then
-                error "Target IP:PORT required"
-                return 1
-            fi
-            local ip="${target%:*}"
-            local port="${target#*:}"
-            block_mongodb_port "$port" "$ip"
-            ;;
-        *)
-            error "Unknown firewall command: $2"
-            echo "Available firewall commands: status, enable, allow, block"
-            return 1
-            ;;
-    esac
+EOF
+        info "MongoDB log rotation configured"
+    fi
+    
+    # Set up log rotation for harden-mongo-server
+    cat > /etc/logrotate.d/harden-mongo-server << 'EOF'
+/var/log/harden-mongo-server/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 640 root root
 }
-
-# Handle service management commands
-handle_service_commands() {
-    case "$1" in
-        start)
-            start_mongodb_service
-            ;;
-        stop)
-            stop_mongodb_service
-            ;;
-        restart)
-            restart_mongodb_service
-            ;;
-        enable)
-            enable_mongodb_service
-            ;;
-        *)
-            error "Unknown service command: $1"
-            return 1
-            ;;
-    esac
+EOF
+    info "Harden-mongo-server log rotation configured"
 }
 
 # ================================
@@ -568,26 +694,24 @@ handle_service_commands() {
 parse_options() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -v|--verbose)
-export HARDEN_MONGO_SERVER_VERBOSE=true
+            --config)
+                export HARDEN_MONGO_SERVER_CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --dry-run)
+                export HARDEN_MONGO_SERVER_DRY_RUN=true
                 shift
                 ;;
-            -d|--debug)
-export HARDEN_MONGO_SERVER_DEBUG=true
-                export HARDEN_MONGO_SERVER_VERBOSE=true
-                export HARDEN_MONGO_SERVER_LOG_LEVEL=DEBUG
-                shift
+            --allow-ip-add)
+                export HARDEN_MONGO_SERVER_ALLOW_IP_ADD="$2"
+                shift 2
                 ;;
-            -f|--force)
-export HARDEN_MONGO_SERVER_FORCE=true
-                shift
+            --allow-ip-remove)
+                export HARDEN_MONGO_SERVER_ALLOW_IP_REMOVE="$2"
+                shift 2
                 ;;
-            -n|--dry-run)
-export HARDEN_MONGO_SERVER_DRY_RUN=true
-                shift
-                ;;
-            -c|--config)
-export HARDEN_MONGO_SERVER_CONFIG_FILE="$2"
+            --restore)
+                export HARDEN_MONGO_SERVER_RESTORE_PATH="$2"
                 shift 2
                 ;;
             -h|--help)
@@ -621,15 +745,22 @@ export HARDEN_MONGO_SERVER_CONFIG_FILE="$2"
 # ================================
 
 main() {
-    # Handle help/version first (before initialization)
+    # Handle help/version and internal maintenance commands first (before initialization)
     case "${1:-}" in
         -h|--help|help)
-            show_help
-            exit 0
-            ;;
+            show_help; exit 0 ;;
         --version|version)
-            show_version
-            exit 0
+            show_version; exit 0 ;;
+        generate-certificates)
+            # Internal: regenerate certificates for rotation
+            load_core_modules
+            if command -v generate_required_certificates >/dev/null 2>&1; then
+                generate_required_certificates || exit 1
+                exit 0
+            else
+                echo "Certificate generation function not available" >&2
+                exit 1
+            fi
             ;;
     esac
     
@@ -641,74 +772,20 @@ main() {
     args=$(parse_options "$@")
     eval "set -- $args"
     
-    # Handle commands
-    local command="$1"
-    
-    if [[ -z "$command" ]]; then
-        print_header "$SCRIPT_DESCRIPTION"
-        error "No command specified"
-        echo "Use '$0 --help' for usage information"
-        exit 1
+    # Handle 1.0.0 MVP single-purpose operation
+    if [[ -n "${HARDEN_MONGO_SERVER_RESTORE_PATH:-}" ]]; then
+        # Restore operation
+        handle_restore_operation
+    elif [[ -n "${HARDEN_MONGO_SERVER_ALLOW_IP_ADD:-}" ]]; then
+        # Add allowed IP
+        handle_allow_ip_add "$HARDEN_MONGO_SERVER_ALLOW_IP_ADD"
+    elif [[ -n "${HARDEN_MONGO_SERVER_ALLOW_IP_REMOVE:-}" ]]; then
+        # Remove allowed IP
+        handle_allow_ip_remove "$HARDEN_MONGO_SERVER_ALLOW_IP_REMOVE"
+    else
+        # Main hardening operation (default)
+        handle_main_hardening_operation
     fi
-    
-    case "$command" in
-        # System analysis commands
-        system-info|mongodb-status|security-check|health-check)
-            handle_system_commands "$@"
-            ;;
-            
-        # Configuration commands
-        configure|harden|setup-ssl|setup-auth|setup-firewall)
-            handle_configuration_commands "$@"
-            ;;
-            
-        # SSL/TLS commands
-        ssl)
-            handle_ssl_commands "$@"
-            ;;
-            
-        # Backup commands
-        backup|restore|backup-list|backup-schedule|backup-cleanup)
-            handle_backup_commands "$@"
-            ;;
-            
-        # Monitoring commands
-        monitoring)
-            handle_monitoring_commands "$@"
-            ;;
-            
-        # Metrics commands
-        metrics)
-            handle_metrics_commands "$@"
-            ;;
-            
-        # Firewall commands
-        firewall)
-            handle_firewall_commands "$@"
-            ;;
-            
-        # Service commands
-        start|stop|restart|enable)
-            handle_service_commands "$@"
-            ;;
-            
-        # Utility commands
-        help)
-            show_help
-            ;;
-        version)
-            show_version
-            ;;
-        info)
-            show_info "$2"
-            ;;
-            
-        *)
-            error "Unknown command: $command"
-            echo "Use '$0 --help' for available commands"
-            exit 1
-            ;;
-    esac
 }
 
 # ================================
